@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFPB Conecta 2026 — Certificados</title>
+  <meta name="description" content="Emissão e verificação de certificados do IFPB Conecta 2026.">
+  <link rel="icon" href="assets/logo-ifpb-conecta.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+  <div class="cores no-print" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <header class="site-header no-print">
+    <div class="wrap bar">
+      <a class="brand" href="index.html">
+        <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        <span><strong>IFPB Conecta</strong><small>23–27 nov 2026</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav id="menu" class="nav" aria-label="Principal">
+        <a href="index.html#programacao">Programação</a>
+        <a href="inscricao.html">Inscrição</a>
+        <a href="certificado.html" aria-current="page">Certificados</a>
+        <a href="admin.html">Organização</a>
+      </nav>
+    </div>
+  </header>
+  <main id="conteudo" class="wrap">
+    <section class="page-intro no-print">
+      <h1>Certificados</h1>
+      <p class="lede">Participantes retiram o certificado com o CPF e o e-mail da inscrição, depois da presença. Organizadores usam o e-mail cadastrado na comissão e o CPF, a matrícula ou os dois. Quem tiver só o código pode validar o documento.</p>
+    </section>
+    <div id="aviso" class="no-print"></div>
+    <form id="form-busca" class="painel-branco no-print">
+      <div class="grid-2">
+        <label class="field">CPF
+          <input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
+        </label>
+        <label class="field">Matrícula
+          <input name="matricula" maxlength="30" autocomplete="off" placeholder="Só para organizador">
+        </label>
+        <label class="field">E-mail
+          <input name="email" type="email" autocomplete="email">
+        </label>
+      </div>
+      <label class="field">Código de verificação
+        <input name="codigo" placeholder="IFPB-2026-" autocomplete="off">
+        <span class="hint">Se preencher o código, a busca ignora CPF, matrícula e e-mail.</span>
+      </label>
+      <button class="btn btn-primary" type="submit">Buscar certificado</button>
+    </form>
+    <div id="modelos" class="modelos no-print">
+      <span class="hint">Ver o modelo antes de conectar o banco:</span>
+      <button type="button" class="btn btn-small btn-ghost" data-modelo="participante">Participante</button>
+      <button type="button" class="btn btn-small btn-ghost" data-modelo="organizador">Organizador</button>
+      <button type="button" class="btn btn-small btn-ghost" data-modelo="avaliador">Avaliador</button>
+    </div>
+    <div id="resultado"></div>
+  </main>
+  <footer class="site-footer no-print">
+    <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026</p>
+    </div>
+  </footer>
+  <div id="toasts" class="toast-wrap no-print" aria-live="polite"></div>
+  <script type="module" src="js/certificado.js"></script>
+</body>
+</html>

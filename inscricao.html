@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFPB Conecta 2026 — Inscrição</title>
+  <meta name="description" content="Inscrição nas atividades do IFPB Conecta, de 23 a 27 de novembro de 2026.">
+  <link rel="icon" href="assets/logo-ifpb-conecta.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+  <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <header class="site-header">
+    <div class="wrap bar">
+      <a class="brand" href="index.html">
+        <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        <span><strong>IFPB Conecta</strong><small>23–27 nov 2026</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav id="menu" class="nav" aria-label="Principal">
+        <a href="index.html#programacao">Programação</a>
+        <a href="inscricao.html" aria-current="page">Inscrição</a>
+        <a href="certificado.html">Certificados</a>
+        <a href="admin.html">Organização</a>
+      </nav>
+    </div>
+  </header>
+  <main id="conteudo" class="wrap">
+    <section class="page-intro">
+      <h1>Inscrição</h1>
+      <p class="lede">Use o mesmo CPF e o mesmo e-mail se for se inscrever em mais de uma atividade. Entrada livre, inscrição no local e links externos continuam só na programação.</p>
+    </section>
+    <div id="aviso"></div>
+    <form id="form-inscricao" class="painel-branco">
+      <div class="hp" aria-hidden="true">
+        <label>Site <input name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field">Nome completo
+          <input name="nome" autocomplete="name" required maxlength="160">
+        </label>
+        <label class="field">E-mail
+          <input name="email" type="email" autocomplete="email" required maxlength="160">
+        </label>
+        <label class="field">CPF
+          <input name="cpf" inputmode="numeric" autocomplete="off" required placeholder="000.000.000-00">
+        </label>
+        <label class="field">Telefone
+          <input name="telefone" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000">
+        </label>
+        <label class="field">Instituição
+          <input name="instituicao" maxlength="160" placeholder="IFPB">
+        </label>
+        <label class="field">Categoria
+          <select name="categoria" id="categoria-opcoes" required></select>
+        </label>
+      </div>
+      <h2>Atividades com inscrição online</h2>
+      <div id="lista-atividades"></div>
+      <button class="btn btn-primary" type="submit">Confirmar inscrição</button>
+    </form>
+    <div id="recibo" class="recibo" hidden></div>
+  </main>
+  <footer class="site-footer">
+    <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026</p>
+      <p>O certificado é emitido depois que a organização registra a presença.</p>
+    </div>
+  </footer>
+  <div id="toasts" class="toast-wrap" aria-live="polite"></div>
+  <script type="module" src="js/inscricao.js"></script>
+</body>
+</html>

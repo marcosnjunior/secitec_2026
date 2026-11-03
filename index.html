@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFPB Conecta 2026 — Programação</title>
+  <meta name="description" content="Programação, inscrições e certificados do IFPB Conecta, de 23 a 27 de novembro de 2026.">
+  <link rel="icon" href="assets/logo-ifpb-conecta.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+  <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <header class="site-header">
+    <div class="wrap bar">
+      <a class="brand" href="index.html">
+        <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        <span><strong>IFPB Conecta</strong><small>23–27 nov 2026</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav id="menu" class="nav" aria-label="Principal">
+        <a href="index.html#programacao" aria-current="page">Programação</a>
+        <a href="inscricao.html">Inscrição</a>
+        <a href="certificado.html">Certificados</a>
+        <a href="admin.html">Organização</a>
+      </nav>
+    </div>
+  </header>
+  <main id="conteudo">
+    <section class="hero">
+      <div class="wrap hero-centro">
+        <img class="hero-logo" src="assets/logo-ifpb-conecta.jpg" alt="Marca do IFPB Conecta, com os eixos Semana da Inclusão, SECITEC, Festival a Moda e Consciência Negra.">
+        <p class="hero-data">23–27 <small>de novembro de 2026</small></p>
+        <p class="lede">Semana de ciência e tecnologia, junto com a Semana da Inclusão, o Festival a Moda e a Consciência Negra. A grade abaixo é montada automaticamente com as atividades publicadas pela organização.</p>
+        <div class="hero-actions no-print">
+          <a class="btn btn-primary" href="#programacao">Ver programação</a>
+          <a class="btn btn-dark" href="inscricao.html">Fazer inscrição</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap bloco">
+      <h2>Quatro eixos da semana</h2>
+      <div class="eixo-grid">
+        <article class="eixo semana_inclusao">
+          <h3>Semana da Inclusão</h3>
+          <p>Acessibilidade, diversidade e permanência.</p>
+        </article>
+        <article class="eixo secitec">
+          <h3>SECITEC</h3>
+          <p>Ciência, pesquisa, inovação e tecnologia.</p>
+        </article>
+        <article class="eixo festival_moda">
+          <h3>Festival a Moda</h3>
+          <p>Oficinas, mostras e apresentações de moda.</p>
+        </article>
+        <article class="eixo consciencia_negra">
+          <h3>Consciência Negra</h3>
+          <p>História, cultura e identidade negra.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap bloco no-print">
+      <h2>Como participar</h2>
+      <ol class="passos">
+        <li class="passo"><strong>1</strong><span>Escolha as atividades na programação. O horário, o local, as vagas e os avaliadores vêm do cadastro.</span></li>
+        <li class="passo"><strong>2</strong><span>Inscreva-se com CPF e e-mail nas atividades que aceitam inscrição online.</span></li>
+        <li class="passo"><strong>3</strong><span>Depois da presença confirmada, retire o certificado pelo CPF ou pelo código.</span></li>
+      </ol>
+    </section>
+
+    <section id="programacao" class="wrap bloco">
+      <p class="so-print"><strong>IFPB Conecta</strong> — programação de 23 a 27 de novembro de 2026</p>
+      <div class="section-head">
+        <div>
+          <h2>Programação</h2>
+          <p id="contagem">As atividades entram nesta grade assim que são publicadas.</p>
+        </div>
+        <button type="button" id="imprimir" class="btn btn-ghost no-print">Imprimir</button>
+      </div>
+      <div id="aviso"></div>
+      <div id="dia-tabs" class="dia-tabs no-print"></div>
+      <div id="filtros" class="filtros no-print"></div>
+      <div id="grade" class="programa" aria-live="polite">
+        <p class="empty">Carregando a programação…</p>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026</p>
+      <p>Semana da Inclusão · SECITEC Ciência e Tecnologia · Festival a Moda · Consciência Negra</p>
+    </div>
+  </footer>
+  <div id="toasts" class="toast-wrap" aria-live="polite"></div>
+  <script type="module" src="js/home.js"></script>
+</body>
+</html>

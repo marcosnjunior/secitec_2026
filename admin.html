@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFPB Conecta 2026 — Organização</title>
+  <meta name="description" content="Cadastro de atividades, organizadores, presenças e certificados do IFPB Conecta 2026.">
+  <link rel="icon" href="assets/logo-ifpb-conecta.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#conteudo-pagina">Ir para o conteúdo</a>
+  <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <header class="site-header">
+    <div class="wrap bar">
+      <a class="brand" href="index.html">
+        <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        <span><strong>IFPB Conecta</strong><small>23–27 nov 2026</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav id="menu" class="nav" aria-label="Principal">
+        <a href="index.html#programacao">Programação</a>
+        <a href="inscricao.html">Inscrição</a>
+        <a href="certificado.html">Certificados</a>
+        <a href="admin.html" aria-current="page">Organização</a>
+      </nav>
+    </div>
+  </header>
+  <main id="conteudo-pagina" class="wrap page-intro">
+    <h1>Organização</h1>
+    <p class="lede">Cadastre as atividades. A programação pública, as vagas e os certificados acompanham esses dados.</p>
+    <div id="admin-root"></div>
+  </main>
+  <footer class="site-footer">
+    <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026</p>
+    </div>
+  </footer>
+  <div id="toasts" class="toast-wrap" aria-live="polite"></div>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,1193 @@
+-- IFPB Conecta 2026
+-- Semana de 23 a 27 de novembro de 2026
+--
+-- COMO USAR ESTE SCRIPT
+-- 1. Crie um projeto em https://supabase.com
+-- 2. Abra SQL Editor → New query
+-- 3. Cole este arquivo inteiro e clique em Run
+-- 4. Em Authentication → Sign In / Providers → Email, desative "Confirm email"
+--    (assim a coordenação entra na hora, sem esperar um e-mail)
+-- 5. Em Project Settings → API, copie:
+--      Project URL          → SUPABASE_URL em js/config.js
+--      anon public          → SUPABASE_ANON_KEY em js/config.js
+-- 6. Não cole a chave service_role no site. Ela ignora toda a segurança.
+-- 7. Recarregue o site, abra Organização e crie o acesso da coordenação.
+--
+-- O script pode ser executado de novo: ele não apaga dados já gravados.
+-- A programação pública, a inscrição e os certificados passam por funções
+-- com permissão controlada. As tabelas internas só são lidas por quem
+-- estiver cadastrado como organizador.
+
+begin;
+
+-- ---------------------------------------------------------------------------
+-- Tipos
+-- ---------------------------------------------------------------------------
+
+do $$ begin
+  create type public.eixo_evento as enum (
+    'semana_inclusao',
+    'secitec',
+    'festival_moda',
+    'consciencia_negra',
+    'geral'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.tipo_evento as enum (
+    'palestra',
+    'oficina',
+    'minicurso',
+    'mesa_redonda',
+    'mostra',
+    'roda_conversa',
+    'apresentacao',
+    'visita',
+    'outro'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.forma_inscricao as enum (
+    'online',
+    'presencial',
+    'link_externo',
+    'livre'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.status_inscricao as enum (
+    'confirmada',
+    'lista_espera',
+    'cancelada',
+    'presente'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.funcao_organizador as enum (
+    'coordenacao',
+    'comissao',
+    'apoio',
+    'monitor'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.categoria_participante as enum (
+    'estudante',
+    'servidor',
+    'professor',
+    'comunidade'
+  );
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.tipo_certificado as enum (
+    'participante',
+    'organizador',
+    'avaliador'
+  );
+exception when duplicate_object then null;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Funções de apoio
+-- ---------------------------------------------------------------------------
+
+create or replace function public.cpf_valido(cpf text)
+returns boolean
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  d text;
+  s int;
+  r int;
+  i int;
+begin
+  d := regexp_replace(coalesce(cpf, ''), '\D', '', 'g');
+  if length(d) <> 11 then
+    return false;
+  end if;
+  if d ~ '^(\d)\1{10}$' then
+    return false;
+  end if;
+
+  s := 0;
+  for i in 1..9 loop
+    s := s + substr(d, i, 1)::int * (11 - i);
+  end loop;
+  r := (s * 10) % 11;
+  if r = 10 then r := 0; end if;
+  if r <> substr(d, 10, 1)::int then
+    return false;
+  end if;
+
+  s := 0;
+  for i in 1..10 loop
+    s := s + substr(d, i, 1)::int * (12 - i);
+  end loop;
+  r := (s * 10) % 11;
+  if r = 10 then r := 0; end if;
+  if r <> substr(d, 11, 1)::int then
+    return false;
+  end if;
+
+  return true;
+end;
+$$;
+
+create or replace function public.email_da_sessao()
+returns text
+language sql
+stable
+set search_path = public
+as $$
+  select lower(coalesce(
+    nullif(auth.jwt() ->> 'email', ''),
+    nullif(auth.jwt() -> 'user_metadata' ->> 'email', '')
+  ));
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Tabelas
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.organizadores (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid unique references auth.users (id) on delete set null,
+  nome text not null,
+  email text not null unique,
+  cpf text,
+  matricula text,
+  telefone text,
+  funcao public.funcao_organizador not null default 'comissao',
+  eixo public.eixo_evento not null default 'geral',
+  instituicao text not null default 'IFPB',
+  carga_horaria_minutos integer not null default 1200,
+  created_at timestamptz not null default now(),
+  constraint organizadores_nome_ok check (char_length(trim(nome)) between 5 and 160),
+  constraint organizadores_cpf_ok check (cpf is null or public.cpf_valido(cpf)),
+  constraint organizadores_matricula_ok check (matricula is null or char_length(matricula) between 3 and 30),
+  constraint organizadores_documento_ok check (cpf is not null or matricula is not null),
+  constraint organizadores_email_ok check (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  constraint organizadores_carga_ok check (carga_horaria_minutos between 60 and 6000)
+);
+
+create table if not exists public.eventos (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null,
+  descricao text,
+  observacao text,
+  tipo public.tipo_evento not null default 'outro',
+  eixo public.eixo_evento not null default 'geral',
+  responsavel_nome text not null,
+  responsavel_email text,
+  data date not null,
+  horario_inicio time not null,
+  duracao_minutos integer not null,
+  localizacao text not null,
+  capacidade integer not null,
+  forma_inscricao public.forma_inscricao not null default 'online',
+  link_externo text,
+  carga_horaria_minutos integer,
+  requer_avaliacao boolean not null default false,
+  publicado boolean not null default true,
+  created_at timestamptz not null default now(),
+  constraint eventos_titulo_ok check (char_length(trim(titulo)) between 3 and 180),
+  constraint eventos_responsavel_ok check (char_length(trim(responsavel_nome)) between 3 and 160),
+  constraint eventos_local_ok check (char_length(trim(localizacao)) between 2 and 160),
+  constraint eventos_periodo check (data between date '2026-11-23' and date '2026-11-27'),
+  constraint eventos_duracao check (duracao_minutos between 10 and 600),
+  constraint eventos_capacidade check (capacidade between 1 and 5000),
+  constraint eventos_carga check (carga_horaria_minutos is null or carga_horaria_minutos between 10 and 6000),
+  constraint eventos_link check (
+    forma_inscricao <> 'link_externo'
+    or coalesce(char_length(trim(link_externo)), 0) > 0
+  )
+);
+
+create table if not exists public.evento_avaliadores (
+  id uuid primary key default gen_random_uuid(),
+  evento_id uuid not null references public.eventos (id) on delete cascade,
+  nome text not null,
+  email text,
+  cpf text,
+  titulacao text,
+  created_at timestamptz not null default now(),
+  constraint avaliadores_nome_ok check (char_length(trim(nome)) between 5 and 160),
+  constraint avaliadores_cpf_ok check (cpf is null or public.cpf_valido(cpf)),
+  constraint avaliadores_email_ok check (
+    email is null or email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  )
+);
+
+create table if not exists public.participantes (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  email text not null unique,
+  cpf text not null unique,
+  telefone text,
+  instituicao text,
+  categoria public.categoria_participante not null,
+  created_at timestamptz not null default now(),
+  constraint participantes_nome_ok check (char_length(trim(nome)) between 5 and 160),
+  constraint participantes_cpf_ok check (public.cpf_valido(cpf)),
+  constraint participantes_email_ok check (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$')
+);
+
+create table if not exists public.inscricoes (
+  id uuid primary key default gen_random_uuid(),
+  participante_id uuid not null references public.participantes (id) on delete cascade,
+  evento_id uuid not null references public.eventos (id) on delete restrict,
+  status public.status_inscricao not null default 'confirmada',
+  created_at timestamptz not null default now(),
+  unique (participante_id, evento_id)
+);
+
+create table if not exists public.certificados (
+  id uuid primary key default gen_random_uuid(),
+  codigo text not null unique,
+  tipo public.tipo_certificado not null,
+  participante_id uuid references public.participantes (id) on delete set null,
+  organizador_id uuid references public.organizadores (id) on delete set null,
+  avaliador_id uuid references public.evento_avaliadores (id) on delete set null,
+  evento_id uuid references public.eventos (id) on delete restrict,
+  inscricao_id uuid references public.inscricoes (id) on delete set null,
+  nome_snapshot text not null,
+  descricao_snapshot text not null,
+  carga_horaria_minutos integer not null,
+  detalhe jsonb not null default '{}'::jsonb,
+  emitido_em timestamptz not null default now(),
+  constraint certificados_carga_ok check (carga_horaria_minutos between 10 and 6000)
+);
+
+create unique index if not exists certificados_inscricao_unica
+  on public.certificados (inscricao_id)
+  where inscricao_id is not null and tipo = 'participante';
+
+create unique index if not exists certificados_organizador_unico
+  on public.certificados (organizador_id)
+  where organizador_id is not null and tipo = 'organizador';
+
+create unique index if not exists certificados_avaliador_unico
+  on public.certificados (avaliador_id)
+  where avaliador_id is not null and tipo = 'avaliador';
+
+create unique index if not exists avaliadores_email_evento
+  on public.evento_avaliadores (evento_id, lower(email))
+  where email is not null and email <> '';
+
+create index if not exists eventos_data_hora_idx
+  on public.eventos (data, horario_inicio);
+
+create index if not exists inscricoes_evento_idx
+  on public.inscricoes (evento_id, status);
+
+create index if not exists inscricoes_participante_idx
+  on public.inscricoes (participante_id);
+
+-- Bancos já criados com a versão anterior: CPF deixa de ser obrigatório
+-- e a matrícula passa a ser aceita no cadastro do organizador.
+alter table public.organizadores add column if not exists matricula text;
+alter table public.organizadores alter column cpf drop not null;
+alter table public.organizadores drop constraint if exists organizadores_cpf_ok;
+alter table public.organizadores drop constraint if exists organizadores_matricula_ok;
+alter table public.organizadores drop constraint if exists organizadores_documento_ok;
+alter table public.organizadores
+  add constraint organizadores_cpf_ok check (cpf is null or public.cpf_valido(cpf));
+alter table public.organizadores
+  add constraint organizadores_matricula_ok check (matricula is null or char_length(matricula) between 3 and 30);
+alter table public.organizadores
+  add constraint organizadores_documento_ok check (cpf is not null or matricula is not null);
+
+create unique index if not exists organizadores_matricula_unica
+  on public.organizadores (matricula)
+  where matricula is not null;
+
+-- ---------------------------------------------------------------------------
+-- Normalização
+-- ---------------------------------------------------------------------------
+
+create or replace function public.tg_normalizar_pessoa()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.nome := trim(new.nome);
+  if new.email is not null then
+    new.email := lower(trim(new.email));
+    if new.email = '' then
+      new.email := null;
+    end if;
+  end if;
+  if new.cpf is not null then
+    new.cpf := regexp_replace(new.cpf, '\D', '', 'g');
+    if new.cpf = '' then
+      new.cpf := null;
+    elsif not public.cpf_valido(new.cpf) then
+      raise exception 'CPF inválido';
+    end if;
+  end if;
+  if tg_table_name = 'organizadores' then
+    new.matricula := nullif(upper(regexp_replace(coalesce(new.matricula, ''), '\s+', '', 'g')), '');
+    if new.matricula is not null and char_length(new.matricula) not between 3 and 30 then
+      raise exception 'Matrícula inválida';
+    end if;
+    if new.cpf is null and new.matricula is null then
+      raise exception 'Informe o CPF ou a matrícula';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.tg_evento_padrao()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.titulo := trim(new.titulo);
+  new.responsavel_nome := trim(new.responsavel_nome);
+  new.localizacao := trim(new.localizacao);
+  if new.descricao is not null then
+    new.descricao := nullif(trim(new.descricao), '');
+  end if;
+  if new.observacao is not null then
+    new.observacao := nullif(trim(new.observacao), '');
+  end if;
+  if new.responsavel_email is not null then
+    new.responsavel_email := nullif(lower(trim(new.responsavel_email)), '');
+  end if;
+  if new.link_externo is not null then
+    new.link_externo := nullif(trim(new.link_externo), '');
+  end if;
+  if new.carga_horaria_minutos is null then
+    new.carga_horaria_minutos := new.duracao_minutos;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_normalizar_organizador on public.organizadores;
+create trigger trg_normalizar_organizador
+before insert or update on public.organizadores
+for each row execute function public.tg_normalizar_pessoa();
+
+drop trigger if exists trg_normalizar_participante on public.participantes;
+create trigger trg_normalizar_participante
+before insert or update on public.participantes
+for each row execute function public.tg_normalizar_pessoa();
+
+drop trigger if exists trg_normalizar_avaliador on public.evento_avaliadores;
+create trigger trg_normalizar_avaliador
+before insert or update on public.evento_avaliadores
+for each row execute function public.tg_normalizar_pessoa();
+
+drop trigger if exists trg_evento_padrao on public.eventos;
+create trigger trg_evento_padrao
+before insert or update on public.eventos
+for each row execute function public.tg_evento_padrao();
+
+create or replace function public.tg_ultimo_organizador()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select count(*) from public.organizadores) <= 1 then
+    raise exception 'Mantenha ao menos um organizador cadastrado';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_ultimo_organizador on public.organizadores;
+create trigger trg_ultimo_organizador
+before delete on public.organizadores
+for each row execute function public.tg_ultimo_organizador();
+
+-- ---------------------------------------------------------------------------
+-- Acesso da organização
+-- ---------------------------------------------------------------------------
+
+create or replace function public.is_organizador()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.organizadores o
+    where o.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.estado_acesso()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'tem_organizador', exists (select 1 from public.organizadores)
+  );
+$$;
+
+drop function if exists public.criar_primeiro_organizador(text, text, text, text, integer);
+
+create or replace function public.criar_primeiro_organizador(
+  p_nome text,
+  p_cpf text,
+  p_matricula text,
+  p_telefone text,
+  p_instituicao text,
+  p_carga_horaria_minutos integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_email text;
+  v_cpf text;
+  v_matricula text;
+begin
+  perform pg_advisory_xact_lock(20261123::bigint);
+
+  if auth.uid() is null then
+    raise exception 'Entre com e-mail e senha antes de criar a coordenação';
+  end if;
+  if exists (select 1 from public.organizadores) then
+    raise exception 'A coordenação já foi criada. Peça para cadastrarem o seu e-mail.';
+  end if;
+
+  v_email := public.email_da_sessao();
+  if v_email is null then
+    raise exception 'Não foi possível ler o e-mail da sessão. Desative a confirmação de e-mail no Supabase.';
+  end if;
+  if char_length(trim(coalesce(p_nome, ''))) < 5 or trim(p_nome) !~ '\S\s+\S' then
+    raise exception 'Informe nome e sobrenome';
+  end if;
+  v_cpf := nullif(regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g'), '');
+  v_matricula := nullif(upper(regexp_replace(coalesce(p_matricula, ''), '\s+', '', 'g')), '');
+  if v_cpf is not null and not public.cpf_valido(v_cpf) then
+    raise exception 'CPF inválido';
+  end if;
+  if v_cpf is null and v_matricula is null then
+    raise exception 'Informe o CPF ou a matrícula';
+  end if;
+  if p_carga_horaria_minutos is null or p_carga_horaria_minutos < 60 then
+    raise exception 'Informe a carga horária da organização em horas';
+  end if;
+
+  insert into public.organizadores (
+    user_id, nome, email, cpf, matricula, telefone, funcao, eixo, instituicao, carga_horaria_minutos
+  ) values (
+    auth.uid(),
+    trim(p_nome),
+    v_email,
+    v_cpf,
+    v_matricula,
+    nullif(trim(coalesce(p_telefone, '')), ''),
+    'coordenacao',
+    'geral',
+    coalesce(nullif(trim(coalesce(p_instituicao, '')), ''), 'IFPB'),
+    p_carga_horaria_minutos
+  )
+  returning id into v_id;
+
+  return jsonb_build_object('id', v_id, 'email', v_email);
+end;
+$$;
+
+create or replace function public.vincular_organizador()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_email text;
+begin
+  if auth.uid() is null then
+    raise exception 'Faça login para continuar';
+  end if;
+
+  v_email := public.email_da_sessao();
+  if v_email is null then
+    raise exception 'Não foi possível ler o e-mail da sessão';
+  end if;
+
+  update public.organizadores
+     set user_id = auth.uid()
+   where user_id is null
+     and lower(email) = v_email
+  returning id into v_id;
+
+  if v_id is null then
+    return null;
+  end if;
+  return jsonb_build_object('id', v_id);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Programação pública e inscrição
+-- ---------------------------------------------------------------------------
+
+create or replace function public.programacao_publica()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    jsonb_agg(item order by item->>'data', item->>'horario_inicio', item->>'titulo'),
+    '[]'::jsonb
+  )
+  from (
+    select jsonb_build_object(
+      'id', e.id,
+      'titulo', e.titulo,
+      'descricao', e.descricao,
+      'observacao', e.observacao,
+      'tipo', e.tipo,
+      'eixo', e.eixo,
+      'responsavel_nome', e.responsavel_nome,
+      'data', e.data,
+      'horario_inicio', to_char(e.horario_inicio, 'HH24:MI'),
+      'horario_fim', to_char((e.horario_inicio + (e.duracao_minutos * interval '1 minute'))::time, 'HH24:MI'),
+      'duracao_minutos', e.duracao_minutos,
+      'localizacao', e.localizacao,
+      'capacidade', e.capacidade,
+      'forma_inscricao', e.forma_inscricao,
+      'link_externo', e.link_externo,
+      'carga_horaria_minutos', coalesce(e.carga_horaria_minutos, e.duracao_minutos),
+      'requer_avaliacao', e.requer_avaliacao,
+      'inscritos', oc.inscritos,
+      'vagas_restantes', greatest(e.capacidade - oc.inscritos, 0),
+      'avaliadores', coalesce(av.lista, '[]'::jsonb)
+    ) as item
+    from public.eventos e
+    left join lateral (
+      select count(*)::int as inscritos
+      from public.inscricoes i
+      where i.evento_id = e.id
+        and i.status in ('confirmada', 'presente')
+    ) oc on true
+    left join lateral (
+      select jsonb_agg(
+        jsonb_build_object('nome', a.nome, 'titulacao', a.titulacao)
+        order by a.nome
+      ) as lista
+      from public.evento_avaliadores a
+      where a.evento_id = e.id
+    ) av on true
+    where e.publicado
+  ) lista;
+$$;
+
+create or replace function public.inscrever_participante(
+  p_nome text,
+  p_email text,
+  p_cpf text,
+  p_telefone text,
+  p_instituicao text,
+  p_categoria text,
+  p_eventos uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cpf text;
+  v_email text;
+  v_part uuid;
+  v_email_db text;
+  v_ids uuid[];
+  v_evento uuid;
+  v_result jsonb := '[]'::jsonb;
+  v_cap integer;
+  v_ocup integer;
+  v_forma public.forma_inscricao;
+  v_titulo text;
+  v_data date;
+  v_hora time;
+  v_inicio timestamp;
+  v_status public.status_inscricao;
+  v_existente public.status_inscricao;
+  v_msg text;
+  v_ok boolean;
+begin
+  v_cpf := regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g');
+  v_email := lower(trim(coalesce(p_email, '')));
+
+  if trim(coalesce(p_nome, '')) !~ '\S\s+\S' or char_length(trim(p_nome)) < 5 then
+    raise exception 'Informe nome e sobrenome';
+  end if;
+  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'E-mail inválido';
+  end if;
+  if not public.cpf_valido(v_cpf) then
+    raise exception 'CPF inválido';
+  end if;
+  if p_categoria not in ('estudante', 'servidor', 'professor', 'comunidade') then
+    raise exception 'Categoria inválida';
+  end if;
+
+  v_ids := array(
+    select distinct x
+    from unnest(coalesce(p_eventos, array[]::uuid[])) as x
+    order by x
+  );
+
+  if cardinality(v_ids) = 0 then
+    raise exception 'Selecione ao menos uma atividade';
+  end if;
+  if cardinality(v_ids) > 30 then
+    raise exception 'Selecione no máximo 30 atividades por vez';
+  end if;
+
+  if exists (
+    select 1 from public.participantes
+    where lower(email) = v_email and cpf <> v_cpf
+  ) then
+    raise exception 'Este e-mail já está cadastrado com outro CPF';
+  end if;
+
+  select id, email into v_part, v_email_db
+  from public.participantes
+  where cpf = v_cpf;
+
+  if v_part is not null and lower(v_email_db) <> v_email then
+    raise exception 'Este CPF já está cadastrado com outro e-mail';
+  end if;
+
+  if v_part is null then
+    insert into public.participantes (nome, email, cpf, telefone, instituicao, categoria)
+    values (
+      trim(p_nome),
+      v_email,
+      v_cpf,
+      nullif(trim(coalesce(p_telefone, '')), ''),
+      nullif(trim(coalesce(p_instituicao, '')), ''),
+      p_categoria::public.categoria_participante
+    )
+    returning id into v_part;
+  end if;
+
+  foreach v_evento in array v_ids loop
+    perform pg_advisory_xact_lock(hashtext(v_evento::text)::bigint);
+
+    select capacidade, forma_inscricao, titulo, data, horario_inicio
+      into v_cap, v_forma, v_titulo, v_data, v_hora
+    from public.eventos
+    where id = v_evento and publicado;
+
+    if not found then
+      v_result := v_result || jsonb_build_array(jsonb_build_object(
+        'evento_id', v_evento,
+        'ok', false,
+        'mensagem', 'Atividade não encontrada'
+      ));
+      continue;
+    end if;
+
+    if v_forma <> 'online' then
+      v_result := v_result || jsonb_build_array(jsonb_build_object(
+        'evento_id', v_evento,
+        'ok', false,
+        'titulo', v_titulo,
+        'mensagem', 'Esta atividade não aceita inscrição pelo site'
+      ));
+      continue;
+    end if;
+
+    v_inicio := v_data + v_hora;
+    if v_inicio <= (now() at time zone 'America/Fortaleza') then
+      v_result := v_result || jsonb_build_array(jsonb_build_object(
+        'evento_id', v_evento,
+        'ok', false,
+        'titulo', v_titulo,
+        'mensagem', 'As inscrições desta atividade já foram encerradas'
+      ));
+      continue;
+    end if;
+
+    select status into v_existente
+    from public.inscricoes
+    where participante_id = v_part and evento_id = v_evento;
+
+    if found then
+      v_result := v_result || jsonb_build_array(jsonb_build_object(
+        'evento_id', v_evento,
+        'ok', true,
+        'titulo', v_titulo,
+        'status', v_existente,
+        'mensagem', 'Você já estava inscrito nesta atividade'
+      ));
+      continue;
+    end if;
+
+    select count(*) into v_ocup
+    from public.inscricoes
+    where evento_id = v_evento
+      and status in ('confirmada', 'presente');
+
+    if v_ocup >= v_cap then
+      v_status := 'lista_espera';
+      v_msg := 'Vagas esgotadas. Você entrou na lista de espera';
+      v_ok := true;
+    else
+      v_status := 'confirmada';
+      v_msg := 'Inscrição confirmada';
+      v_ok := true;
+    end if;
+
+    insert into public.inscricoes (participante_id, evento_id, status)
+    values (v_part, v_evento, v_status);
+
+    v_result := v_result || jsonb_build_array(jsonb_build_object(
+      'evento_id', v_evento,
+      'ok', v_ok,
+      'titulo', v_titulo,
+      'status', v_status,
+      'mensagem', v_msg
+    ));
+  end loop;
+
+  return jsonb_build_object(
+    'participante_id', v_part,
+    'nome', trim(p_nome),
+    'resultados', v_result
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Certificados
+-- ---------------------------------------------------------------------------
+
+create or replace function public.novo_codigo_certificado()
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_codigo text;
+begin
+  loop
+    v_codigo := 'IFPB-2026-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
+    exit when not exists (select 1 from public.certificados where codigo = v_codigo);
+  end loop;
+  return v_codigo;
+end;
+$$;
+
+create or replace function public.certificado_json(c public.certificados)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'codigo', c.codigo,
+    'tipo', c.tipo,
+    'nome', c.nome_snapshot,
+    'descricao', c.descricao_snapshot,
+    'carga_horaria_minutos', c.carga_horaria_minutos,
+    'emitido_em', c.emitido_em,
+    'detalhe', c.detalhe
+  );
+$$;
+
+create or replace function public.emitir_certificado_participante(p_inscricao uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ins public.inscricoes%rowtype;
+  v_part public.participantes%rowtype;
+  v_evt public.eventos%rowtype;
+  v_cert public.certificados%rowtype;
+begin
+  if coalesce(auth.role(), '') = 'anon'
+     or (auth.uid() is not null and not public.is_organizador()) then
+    raise exception 'Acesso restrito à organização';
+  end if;
+
+  select * into v_ins from public.inscricoes where id = p_inscricao;
+  if not found then
+    raise exception 'Inscrição não encontrada';
+  end if;
+  if v_ins.status <> 'presente' then
+    raise exception 'Registre a presença antes de emitir o certificado';
+  end if;
+
+  select * into v_cert
+  from public.certificados
+  where inscricao_id = p_inscricao and tipo = 'participante'
+  limit 1;
+  if found then
+    return public.certificado_json(v_cert);
+  end if;
+
+  select * into v_part from public.participantes where id = v_ins.participante_id;
+  select * into v_evt from public.eventos where id = v_ins.evento_id;
+
+  insert into public.certificados (
+    codigo, tipo, participante_id, evento_id, inscricao_id,
+    nome_snapshot, descricao_snapshot, carga_horaria_minutos, detalhe
+  ) values (
+    public.novo_codigo_certificado(),
+    'participante',
+    v_part.id,
+    v_evt.id,
+    v_ins.id,
+    v_part.nome,
+    v_evt.titulo,
+    coalesce(v_evt.carga_horaria_minutos, v_evt.duracao_minutos),
+    jsonb_build_object(
+      'tipo_evento', v_evt.tipo,
+      'eixo', v_evt.eixo,
+      'data', v_evt.data,
+      'horario_inicio', to_char(v_evt.horario_inicio, 'HH24:MI'),
+      'horario_fim', to_char((v_evt.horario_inicio + (v_evt.duracao_minutos * interval '1 minute'))::time, 'HH24:MI'),
+      'localizacao', v_evt.localizacao,
+      'instituicao', v_part.instituicao
+    )
+  )
+  returning * into v_cert;
+
+  return public.certificado_json(v_cert);
+end;
+$$;
+
+create or replace function public.tg_emitir_certificado_presenca()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status = 'presente'
+     and (tg_op = 'INSERT' or old.status is distinct from 'presente') then
+    perform public.emitir_certificado_participante(new.id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_emitir_certificado_presenca on public.inscricoes;
+create trigger trg_emitir_certificado_presenca
+after insert or update of status on public.inscricoes
+for each row execute function public.tg_emitir_certificado_presenca();
+
+create or replace function public.emitir_certificado_organizador(p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org public.organizadores%rowtype;
+  v_cert public.certificados%rowtype;
+begin
+  if not public.is_organizador() then
+    raise exception 'Acesso restrito à organização';
+  end if;
+
+  select * into v_org from public.organizadores where id = p_id;
+  if not found then
+    raise exception 'Organizador não encontrado';
+  end if;
+
+  select * into v_cert
+  from public.certificados
+  where organizador_id = p_id and tipo = 'organizador'
+  limit 1;
+  if found then
+    return public.certificado_json(v_cert);
+  end if;
+
+  insert into public.certificados (
+    codigo, tipo, organizador_id, nome_snapshot, descricao_snapshot, carga_horaria_minutos, detalhe
+  ) values (
+    public.novo_codigo_certificado(),
+    'organizador',
+    v_org.id,
+    v_org.nome,
+    'Organização do IFPB Conecta 2026',
+    v_org.carga_horaria_minutos,
+    jsonb_build_object(
+      'funcao', v_org.funcao,
+      'eixo', v_org.eixo,
+      'instituicao', v_org.instituicao,
+      'matricula', v_org.matricula
+    )
+  )
+  returning * into v_cert;
+
+  return public.certificado_json(v_cert);
+end;
+$$;
+
+create or replace function public.emitir_certificado_avaliador(p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_av public.evento_avaliadores%rowtype;
+  v_evt public.eventos%rowtype;
+  v_cert public.certificados%rowtype;
+begin
+  if not public.is_organizador() then
+    raise exception 'Acesso restrito à organização';
+  end if;
+
+  select * into v_av from public.evento_avaliadores where id = p_id;
+  if not found then
+    raise exception 'Avaliador não encontrado';
+  end if;
+  select * into v_evt from public.eventos where id = v_av.evento_id;
+
+  select * into v_cert
+  from public.certificados
+  where avaliador_id = p_id and tipo = 'avaliador'
+  limit 1;
+  if found then
+    return public.certificado_json(v_cert);
+  end if;
+
+  insert into public.certificados (
+    codigo, tipo, avaliador_id, evento_id,
+    nome_snapshot, descricao_snapshot, carga_horaria_minutos, detalhe
+  ) values (
+    public.novo_codigo_certificado(),
+    'avaliador',
+    v_av.id,
+    v_evt.id,
+    v_av.nome,
+    v_evt.titulo,
+    coalesce(v_evt.carga_horaria_minutos, v_evt.duracao_minutos),
+    jsonb_build_object(
+      'titulacao', v_av.titulacao,
+      'tipo_evento', v_evt.tipo,
+      'eixo', v_evt.eixo,
+      'data', v_evt.data,
+      'horario_inicio', to_char(v_evt.horario_inicio, 'HH24:MI'),
+      'horario_fim', to_char((v_evt.horario_inicio + (v_evt.duracao_minutos * interval '1 minute'))::time, 'HH24:MI'),
+      'localizacao', v_evt.localizacao
+    )
+  )
+  returning * into v_cert;
+
+  return public.certificado_json(v_cert);
+end;
+$$;
+
+drop function if exists public.consultar_certificados(text, text, text);
+
+create or replace function public.consultar_certificados(
+  p_cpf text default null,
+  p_email text default null,
+  p_codigo text default null,
+  p_matricula text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_cpf text;
+  v_email text;
+  v_codigo text;
+  v_matricula text;
+begin
+  v_codigo := upper(trim(coalesce(p_codigo, '')));
+  if v_codigo <> '' then
+    return coalesce((
+      select jsonb_agg(public.certificado_json(c) order by c.emitido_em)
+      from public.certificados c
+      where c.codigo = v_codigo
+    ), '[]'::jsonb);
+  end if;
+
+  v_cpf := regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g');
+  v_matricula := nullif(upper(regexp_replace(coalesce(p_matricula, ''), '\s+', '', 'g')), '');
+  v_email := lower(trim(coalesce(p_email, '')));
+  if v_cpf = '' and v_matricula is null then
+    raise exception 'Informe o CPF ou a matrícula';
+  end if;
+  if v_cpf <> '' and not public.cpf_valido(v_cpf) then
+    raise exception 'CPF inválido';
+  end if;
+  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'E-mail inválido';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(public.certificado_json(c) order by c.emitido_em)
+    from public.certificados c
+    left join public.participantes p on p.id = c.participante_id
+    left join public.organizadores o on o.id = c.organizador_id
+    left join public.evento_avaliadores a on a.id = c.avaliador_id
+    where (v_cpf <> '' and p.cpf = v_cpf and lower(p.email) = v_email)
+       or (v_cpf <> '' and o.cpf = v_cpf and lower(o.email) = v_email)
+       or (v_matricula is not null and o.matricula = v_matricula and lower(o.email) = v_email)
+       or (v_cpf <> '' and a.cpf = v_cpf and lower(a.email) = v_email)
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Segurança das tabelas
+-- Quem visita o site (anon) só chama as funções públicas.
+-- Quem entrou como organizador lê e grava as tabelas da organização.
+-- ---------------------------------------------------------------------------
+
+alter table public.organizadores enable row level security;
+alter table public.eventos enable row level security;
+alter table public.evento_avaliadores enable row level security;
+alter table public.participantes enable row level security;
+alter table public.inscricoes enable row level security;
+alter table public.certificados enable row level security;
+
+drop policy if exists organizadores_admin on public.organizadores;
+create policy organizadores_admin on public.organizadores
+for all to authenticated
+using (public.is_organizador())
+with check (public.is_organizador());
+
+drop policy if exists eventos_admin on public.eventos;
+create policy eventos_admin on public.eventos
+for all to authenticated
+using (public.is_organizador())
+with check (public.is_organizador());
+
+drop policy if exists avaliadores_admin on public.evento_avaliadores;
+create policy avaliadores_admin on public.evento_avaliadores
+for all to authenticated
+using (public.is_organizador())
+with check (public.is_organizador());
+
+drop policy if exists participantes_admin on public.participantes;
+create policy participantes_admin on public.participantes
+for all to authenticated
+using (public.is_organizador())
+with check (public.is_organizador());
+
+drop policy if exists inscricoes_admin on public.inscricoes;
+create policy inscricoes_admin on public.inscricoes
+for all to authenticated
+using (public.is_organizador())
+with check (public.is_organizador());
+
+drop policy if exists certificados_leitura on public.certificados;
+create policy certificados_leitura on public.certificados
+for select to authenticated
+using (public.is_organizador());
+
+drop policy if exists certificados_exclusao on public.certificados;
+create policy certificados_exclusao on public.certificados
+for delete to authenticated
+using (public.is_organizador());
+
+revoke all on table public.organizadores from public, anon;
+revoke all on table public.eventos from public, anon;
+revoke all on table public.evento_avaliadores from public, anon;
+revoke all on table public.participantes from public, anon;
+revoke all on table public.inscricoes from public, anon;
+revoke all on table public.certificados from public, anon;
+
+grant select, insert, update, delete on public.organizadores to authenticated;
+grant select, insert, update, delete on public.eventos to authenticated;
+grant select, insert, update, delete on public.evento_avaliadores to authenticated;
+grant select, insert, update, delete on public.participantes to authenticated;
+grant select, insert, update, delete on public.inscricoes to authenticated;
+grant select, delete on public.certificados to authenticated;
+
+revoke all on function public.cpf_valido(text) from public;
+revoke all on function public.email_da_sessao() from public;
+revoke all on function public.is_organizador() from public;
+revoke all on function public.estado_acesso() from public;
+revoke all on function public.criar_primeiro_organizador(text, text, text, text, text, integer) from public;
+revoke all on function public.vincular_organizador() from public;
+revoke all on function public.programacao_publica() from public;
+revoke all on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) from public;
+revoke all on function public.novo_codigo_certificado() from public;
+revoke all on function public.certificado_json(public.certificados) from public;
+revoke all on function public.emitir_certificado_participante(uuid) from public;
+revoke all on function public.emitir_certificado_organizador(uuid) from public;
+revoke all on function public.emitir_certificado_avaliador(uuid) from public;
+revoke all on function public.consultar_certificados(text, text, text, text) from public;
+revoke all on function public.tg_normalizar_pessoa() from public;
+revoke all on function public.tg_evento_padrao() from public;
+revoke all on function public.tg_ultimo_organizador() from public;
+revoke all on function public.tg_emitir_certificado_presenca() from public;
+
+grant execute on function public.cpf_valido(text) to anon, authenticated;
+grant execute on function public.email_da_sessao() to authenticated;
+grant execute on function public.is_organizador() to authenticated;
+grant execute on function public.estado_acesso() to anon, authenticated;
+grant execute on function public.criar_primeiro_organizador(text, text, text, text, text, integer) to authenticated;
+grant execute on function public.vincular_organizador() to authenticated;
+grant execute on function public.programacao_publica() to anon, authenticated;
+grant execute on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) to anon, authenticated;
+grant execute on function public.certificado_json(public.certificados) to anon, authenticated;
+grant execute on function public.emitir_certificado_participante(uuid) to authenticated;
+grant execute on function public.emitir_certificado_organizador(uuid) to authenticated;
+grant execute on function public.emitir_certificado_avaliador(uuid) to authenticated;
+grant execute on function public.consultar_certificados(text, text, text, text) to anon, authenticated;
+grant execute on function public.tg_normalizar_pessoa() to anon, authenticated;
+grant execute on function public.tg_evento_padrao() to authenticated;
+grant execute on function public.tg_ultimo_organizador() to authenticated;
+grant execute on function public.tg_emitir_certificado_presenca() to authenticated;
+
+notify pgrst, 'reload schema';
+
+commit;
+
+-- Exemplo comentado, para testar depois que a coordenação já tiver entrado.
+-- A programação pública só mostra o que estiver publicado.
+--
+-- insert into public.eventos (
+--   titulo, tipo, eixo, responsavel_nome, data, horario_inicio,
+--   duracao_minutos, localizacao, capacidade, forma_inscricao, publicado
+-- ) values (
+--   'Abertura do IFPB Conecta', 'palestra', 'geral', 'Coordenação',
+--   '2026-11-23', '08:00', 60, 'Auditório', 200, 'livre', true
+-- );
