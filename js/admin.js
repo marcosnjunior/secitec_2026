@@ -1,7 +1,7 @@
 import { configError, configured, mensagemErro, supabase } from "./api.js";
 import {
-  CATEGORIAS, DIAS, EIXOS, FORMAS, FUNCOES, STATUS, TIPOS,
-  cpfValido, digitos, esc, formatCarga, formatCpf, horaCurta, horasParaInput,
+  CATEGORIAS, DIAS, EIXOS, FORMAS, FUNCOES, RECOMENDACOES, STATUS, STATUS_TRABALHO, TIPOS,
+  cpfValido, digitos, esc, formatCarga, formatCpf, formatarQuando, horaCurta, horasParaInput,
   htmlAviso, initNav, maskCpf, maskPhone, matriculaNormalizada, optionsHtml, safeUrl, somarMinutos, toast,
 } from "./ui.js";
 
@@ -15,6 +15,9 @@ const state = {
   inscricoes: [],
   organizadores: [],
   certificados: [],
+  trabalhos: [],
+  trabalhosErro: "",
+  trabalhoAberto: null,
   filtro: { evento: "", status: "", q: "" },
 };
 let ouvintes = false;
@@ -225,6 +228,8 @@ function montarApp() {
           <button type="button" data-action="secao" data-secao="atividades">Atividades</button>
           <button type="button" data-action="secao" data-secao="inscricoes">Inscrições</button>
           <button type="button" data-action="secao" data-secao="organizadores">Organizadores</button>
+          ${state.perfil.funcao === "coordenacao" ? `<button type="button" data-action="secao" data-secao="trabalhos">Trabalhos</button>` : ""}
+          ${state.perfil.pode_avaliar_trabalhos ? `<button type="button" data-action="secao" data-secao="avaliacoes">Avaliações</button>` : ""}
           <button type="button" data-action="secao" data-secao="certificados">Certificados</button>
         </nav>
         <button type="button" class="sair" data-action="sair">Sair</button>
@@ -258,6 +263,19 @@ async function recarregar() {
     state.inscricoes = ins.data || [];
     state.organizadores = org.data || [];
     state.certificados = cert.data || [];
+    const trab = await supabase.from("trabalhos")
+      .select("*, trabalho_imagens(id, caminho, legenda, ordem), avaliador:organizadores!avaliador_id(id, nome)")
+      .order("created_at", { ascending: false });
+    if (trab.error) {
+      state.trabalhos = [];
+      state.trabalhosErro = mensagemErro(trab.error);
+    } else {
+      state.trabalhos = trab.data || [];
+      state.trabalhosErro = "";
+    }
+    if (state.trabalhoAberto && !state.trabalhos.some((item) => item.id === state.trabalhoAberto)) {
+      state.trabalhoAberto = null;
+    }
     render();
   } catch (error) {
     if (box) box.innerHTML = `<p class="erro">${esc(mensagemErro(error))}</p>`;
@@ -275,7 +293,10 @@ function render() {
   else if (state.secao === "atividades") box.innerHTML = htmlAtividades();
   else if (state.secao === "inscricoes") renderInscricoes(true);
   else if (state.secao === "organizadores") box.innerHTML = htmlOrganizadores();
+  else if (state.secao === "trabalhos") box.innerHTML = htmlTrabalhos();
+  else if (state.secao === "avaliacoes") box.innerHTML = htmlAvaliacoes();
   else if (state.secao === "certificados") box.innerHTML = htmlCertificados();
+  if (state.secao === "trabalhos" || state.secao === "avaliacoes") preencherImagens();
 }
 
 function htmlPainel() {
@@ -289,6 +310,7 @@ function htmlPainel() {
       <article class="stat"><b>${presentes}</b> presenças</article>
       <article class="stat"><b>${state.certificados.length}</b> certificados</article>
     </div>
+    ${state.perfil.funcao === "coordenacao" ? `<p>${state.trabalhos.filter((item) => item.status === "submetido" || item.status === "com_coordenacao").length} trabalho(s) aguardando encaminhamento.</p>${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}` : ""}
     <h2>Publicadas</h2>
     ${proximas.length === 0
       ? `<p class="empty">Nenhuma atividade publicada. Cadastre a primeira em Atividades.</p>`
@@ -440,7 +462,8 @@ function htmlOrganizadores() {
           <input name="carga" type="number" min="1" max="100" step="0.5" value="20" required>
         </label>
       </div>
-      <p class="hint">Informe o CPF, a matrícula ou os dois. Quem ainda não tem senha entra em Organização → Criar acesso, com este e-mail.</p>
+      <label class="field"><span><input type="checkbox" name="pode_avaliar"> Pode avaliar trabalhos científicos</span></label>
+      <p class="hint">Informe o CPF, a matrícula ou os dois. Quem ainda não tem senha entra em Organização → Criar acesso, com este e-mail. Só entra na lista de encaminhamento quem estiver marcado e já tiver senha.</p>
       <div class="linha-acoes">
         <button class="btn btn-dark" type="submit">Salvar organizador</button>
         <button class="btn btn-ghost" type="button" data-action="limpar-org">Limpar</button>
@@ -452,7 +475,7 @@ function htmlOrganizadores() {
         ${state.organizadores.map((org) => {
           const cert = state.certificados.find((item) => item.organizador_id === org.id && item.tipo === "organizador");
           return `<tr>
-            <td><strong>${esc(org.nome)}</strong><br><span class="hint">${esc(org.email)} · ${esc(textoDocumentoOrganizador(org))}</span></td>
+            <td><strong>${esc(org.nome)}</strong><br><span class="hint">${esc(org.email)} · ${esc(textoDocumentoOrganizador(org))}${org.pode_avaliar_trabalhos ? " · avalia trabalhos" : ""}</span></td>
             <td>${esc(FUNCOES[org.funcao] || "")}<br><span class="hint">${esc(EIXOS[org.eixo] || "")} · ${esc(formatCarga(org.carga_horaria_minutos))}</span></td>
             <td>${org.user_id ? "Com senha" : "Aguardando senha"}</td>
             <td>${cert ? `<a href="certificado.html?codigo=${esc(cert.codigo)}">${esc(cert.codigo)}</a>` : "Não emitido"}</td>
@@ -492,6 +515,156 @@ function htmlCertificados() {
         </tr>`).join("") || `<tr><td colspan="5">Nenhum certificado emitido.</td></tr>`}
       </tbody>
     </table></div>`;
+}
+
+function professoresAvaliadores() {
+  return state.organizadores.filter((org) => org.pode_avaliar_trabalhos && org.user_id);
+}
+
+function htmlTrabalhos() {
+  if (state.perfil.funcao !== "coordenacao") return `<p class="empty">A coordenação acompanha os trabalhos submetidos.</p>`;
+  const aberto = state.trabalhos.find((item) => item.id === state.trabalhoAberto);
+  return `
+    <h2>Trabalhos submetidos</h2>
+    ${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}
+    <p class="hint">Aceite o trabalho escolhendo um professor com acesso. Cancelar o envio devolve o arquivo para a coordenação, que pode encaminhar de novo.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Trabalho</th><th>Autor</th><th>Status</th><th>Professor</th><th></th></tr></thead>
+      <tbody>
+        ${state.trabalhos.map((trabalho) => `<tr>
+          <td><strong>${esc(trabalho.protocolo)}</strong><br>${esc(trabalho.titulo)}</td>
+          <td>${esc(trabalho.autor_nome)}<br><span class="hint">${esc(trabalho.autor_email)}</span></td>
+          <td><span class="status ${esc(trabalho.status)}">${esc(STATUS_TRABALHO[trabalho.status] || trabalho.status)}</span></td>
+          <td>${esc(trabalho.avaliador?.nome || "—")}</td>
+          <td><button type="button" class="btn btn-small btn-ghost" data-action="abrir-trabalho" data-id="${esc(trabalho.id)}">${state.trabalhoAberto === trabalho.id ? "Fechar" : "Abrir"}</button></td>
+        </tr>`).join("") || `<tr><td colspan="5">Nenhum trabalho submetido.</td></tr>`}
+      </tbody>
+    </table></div>
+    ${aberto ? htmlDetalheTrabalho(aberto, "coordenacao") : ""}`;
+}
+
+function htmlAvaliacoes() {
+  const lista = state.trabalhos.filter((item) => item.avaliador_id === state.perfil.id);
+  const aberto = lista.find((item) => item.id === state.trabalhoAberto);
+  return `
+    <h2>Avaliações</h2>
+    ${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}
+    <p class="hint">Devolva o parecer para a coordenação. O aluno vê a recomendação e o texto, sem o seu nome.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Trabalho</th><th>Autor</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${lista.map((trabalho) => `<tr>
+          <td><strong>${esc(trabalho.protocolo)}</strong><br>${esc(trabalho.titulo)}</td>
+          <td>${esc(trabalho.autor_nome)}</td>
+          <td><span class="status ${esc(trabalho.status)}">${esc(STATUS_TRABALHO[trabalho.status] || trabalho.status)}</span></td>
+          <td><button type="button" class="btn btn-small btn-ghost" data-action="abrir-trabalho" data-id="${esc(trabalho.id)}">${state.trabalhoAberto === trabalho.id ? "Fechar" : "Abrir"}</button></td>
+        </tr>`).join("") || `<tr><td colspan="4">Nenhum trabalho encaminhado para você.</td></tr>`}
+      </tbody>
+    </table></div>
+    ${aberto ? htmlDetalheTrabalho(aberto, "professor") : ""}`;
+}
+
+function htmlDetalheTrabalho(trabalho, modo) {
+  const professores = professoresAvaliadores();
+  const coautores = Array.isArray(trabalho.coautores) ? trabalho.coautores : [];
+  const imagens = [...(trabalho.trabalho_imagens || [])].sort((a, b) => a.ordem - b.ordem);
+  const secoes = [
+    ["Resumo", trabalho.resumo],
+    ["Introdução", trabalho.introducao],
+    ["Fundamentação teórica", trabalho.fundamentacao],
+    ["Metodologia", trabalho.metodologia],
+    ["Resultados", trabalho.resultados],
+    ["Discussões", trabalho.discussoes],
+    ["Bibliografia", trabalho.bibliografia],
+  ];
+  return `
+    <article class="painel-branco" id="detalhe-trabalho">
+      <p><span class="status ${esc(trabalho.status)}">${esc(STATUS_TRABALHO[trabalho.status] || trabalho.status)}</span> · ${esc(trabalho.protocolo)}</p>
+      <h3>${esc(trabalho.titulo)}</h3>
+      <p>${esc(EIXOS[trabalho.eixo] || "")}<br>${esc((trabalho.palavras_chave || []).join(", "))}</p>
+      <p><strong>${esc(trabalho.autor_nome)}</strong> · ${esc(trabalho.autor_email)}<br>
+        Orientação: ${esc(trabalho.orientador_nome)} · ${esc(trabalho.orientador_email)}</p>
+      ${coautores.length ? `<p>Coautores: ${coautores.map((pessoa) => `${esc(pessoa.nome)} (${esc(pessoa.email)})`).join("; ")}</p>` : ""}
+      ${modo === "coordenacao" && trabalho.avaliador?.nome ? `<p>Professor avaliador: <strong>${esc(trabalho.avaliador.nome)}</strong></p>` : ""}
+      ${trabalho.recomendacao ? `<p>Recomendação: <strong>${esc(RECOMENDACOES[trabalho.recomendacao] || "")}</strong></p>` : ""}
+      ${trabalho.parecer ? `<div class="trabalho-secoes"><p>${esc(trabalho.parecer)}</p></div>` : ""}
+      <div class="trabalho-secoes">
+        ${secoes.map(([titulo, texto]) => `<h3>${esc(titulo)}</h3><p>${esc(texto)}</p>`).join("")}
+      </div>
+      ${imagens.length ? `<div class="figuras">${imagens.map((img) => `<figure><img data-caminho="${esc(img.caminho)}" alt="${esc(img.legenda)}"><figcaption>${esc(img.legenda)}</figcaption></figure>`).join("")}</div>` : `<p class="hint">Sem imagens.</p>`}
+      ${modo === "coordenacao" && trabalho.status !== "em_avaliacao" ? `
+        <form id="form-encaminhar">
+          <input type="hidden" name="trabalho" value="${esc(trabalho.id)}">
+          <label class="field">Professor
+            <select name="professor" required>
+              <option value="">Escolha</option>
+              ${professores.map((org) => `<option value="${esc(org.id)}">${esc(org.nome)}</option>`).join("")}
+            </select>
+          </label>
+          ${professores.length ? "" : `<p class="hint">Marque “Pode avaliar trabalhos” em um organizador que já criou senha.</p>`}
+          <button class="btn btn-dark" type="submit" ${professores.length ? "" : "disabled"}>Aceitar e encaminhar</button>
+        </form>` : ""}
+      ${modo === "coordenacao" && trabalho.status === "em_avaliacao" ? `<button type="button" class="btn btn-danger" data-action="cancelar-envio" data-id="${esc(trabalho.id)}">Cancelar envio</button>` : ""}
+      ${modo === "professor" && trabalho.status === "em_avaliacao" ? `
+        <form id="form-parecer">
+          <input type="hidden" name="trabalho" value="${esc(trabalho.id)}">
+          <label class="field">Recomendação
+            <select name="recomendacao">
+              ${Object.entries(RECOMENDACOES).map(([valor, rotulo]) => `<option value="${esc(valor)}">${esc(rotulo)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field">Parecer
+            <textarea name="parecer" required minlength="20" maxlength="8000"></textarea>
+          </label>
+          <button class="btn btn-dark" type="submit">Devolver à coordenação</button>
+        </form>` : ""}
+    </article>`;
+}
+
+async function preencherImagens() {
+  const figuras = [...document.querySelectorAll("img[data-caminho]")];
+  await Promise.all(figuras.map(async (img) => {
+    const { data } = await supabase.storage.from("trabalhos").createSignedUrl(img.dataset.caminho, 60 * 30);
+    if (data?.signedUrl && img.isConnected) img.src = data.signedUrl;
+  }));
+}
+
+async function encaminharTrabalho(form) {
+  const { error } = await supabase.rpc("encaminhar_trabalho", {
+    p_id: form.trabalho.value,
+    p_professor: form.professor.value,
+  });
+  if (error) {
+    toast(mensagemErro(error), "err");
+    return;
+  }
+  toast("Trabalho encaminhado para avaliação.");
+  await recarregar();
+}
+
+async function cancelarEnvio(id) {
+  const { error } = await supabase.rpc("cancelar_encaminhamento", { p_id: id });
+  if (error) {
+    toast(mensagemErro(error), "err");
+    return;
+  }
+  toast("Envio cancelado. O trabalho voltou para a coordenação.");
+  await recarregar();
+}
+
+async function devolverParecer(form) {
+  if (!form.reportValidity()) return;
+  const { error } = await supabase.rpc("devolver_parecer", {
+    p_id: form.trabalho.value,
+    p_recomendacao: form.recomendacao.value,
+    p_parecer: form.parecer.value.trim(),
+  });
+  if (error) {
+    toast(mensagemErro(error), "err");
+    return;
+  }
+  toast("Parecer devolvido à coordenação.");
+  await recarregar();
 }
 
 function abrirEditor(ev) {
@@ -691,6 +864,7 @@ async function salvarOrganizador(form) {
     eixo: form.eixo.value,
     instituicao: form.instituicao.value.trim() || "IFPB",
     carga_horaria_minutos: Math.round(Number(form.carga.value) * 60),
+    pode_avaliar_trabalhos: form.pode_avaliar.checked,
   };
   const id = form.registro.value;
   const consulta = id
@@ -795,6 +969,10 @@ async function onClick(evento) {
     } else if (action === "excluir-org") await excluirOrganizador(id);
     else if (action === "emitir-pendentes") await emitirPendentes();
     else if (action === "excluir-cert") await excluirCertificado(id);
+    else if (action === "abrir-trabalho") {
+      state.trabalhoAberto = state.trabalhoAberto === id ? null : id;
+      render();
+    } else if (action === "cancelar-envio") await cancelarEnvio(id);
   } catch (error) {
     toast(mensagemErro(error), "err");
   }
@@ -803,11 +981,13 @@ async function onClick(evento) {
 async function onSubmit(evento) {
   const form = evento.target;
   if (!(form instanceof HTMLFormElement)) return;
-  if (!["form-evento", "form-org", "form-manual"].includes(form.id)) return;
+  if (!["form-evento", "form-org", "form-manual", "form-encaminhar", "form-parecer"].includes(form.id)) return;
   evento.preventDefault();
   try {
     if (form.id === "form-evento") await salvarEvento(form);
     else if (form.id === "form-org") await salvarOrganizador(form);
+    else if (form.id === "form-encaminhar") await encaminharTrabalho(form);
+    else if (form.id === "form-parecer") await devolverParecer(form);
     else await salvarManual(form);
   } catch (error) {
     toast(mensagemErro(error), "err");
@@ -987,6 +1167,7 @@ function preencherOrganizador(id) {
   form.eixo.value = org.eixo;
   form.instituicao.value = org.instituicao || "IFPB";
   form.carga.value = horasParaInput(org.carga_horaria_minutos);
+  form.pode_avaliar.checked = Boolean(org.pode_avaliar_trabalhos);
   form.scrollIntoView({ block: "start" });
 }
 

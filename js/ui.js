@@ -66,6 +66,26 @@ export const STATUS = {
   presente: "Presente",
 };
 
+export const STATUS_TRABALHO = {
+  submetido: "Submetido",
+  em_avaliacao: "Em avaliação",
+  avaliado: "Avaliado",
+  com_coordenacao: "Com a coordenação",
+};
+
+export const RECOMENDACOES = {
+  aceitar: "Aceitar",
+  aceitar_com_correcoes: "Aceitar com correções",
+  nao_aceitar: "Não aceitar",
+};
+
+export const MOVIMENTOS = {
+  submetido: "Submetido. O trabalho está com a coordenação.",
+  encaminhado: "Em avaliação.",
+  parecer: "Avaliação devolvida à coordenação.",
+  cancelado: "A coordenação cancelou o envio. O trabalho voltou para a coordenação.",
+};
+
 export function esc(valor) {
   return String(valor ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;",
@@ -129,6 +149,17 @@ export function formatDataLonga(iso) {
   const [ano, mes, dia] = iso.slice(0, 10).split("-").map(Number);
   const data = new Date(ano, mes - 1, dia);
   return data.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+export function formatarQuando(iso) {
+  if (!iso) return "";
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return "";
+  return data.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Fortaleza",
+  });
 }
 
 export function horaCurta(valor) {

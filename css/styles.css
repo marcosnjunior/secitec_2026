@@ -112,7 +112,7 @@ a { color: inherit; }
 
 .eixo-grid, .passos, .stat-grid { display: grid; gap: 12px; }
 .eixo-grid { grid-template-columns: repeat(4, 1fr); }
-.passos { grid-template-columns: repeat(3, 1fr); list-style: none; padding: 0; margin: 0; }
+.passos { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); list-style: none; padding: 0; margin: 0; }
 .stat-grid { grid-template-columns: repeat(4, 1fr); }
 
 .eixo, .passo, .stat, .painel-branco, .banner, .item-prog, .recibo {
@@ -282,9 +282,15 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .status { font-weight: 800; font-size: 0.82rem; }
-.status.confirmada, .status.presente { color: var(--green); }
-.status.lista_espera { color: var(--gold-ink); }
+.status.confirmada, .status.presente, .status.avaliado { color: var(--green); }
+.status.lista_espera, .status.submetido, .status.com_coordenacao { color: var(--gold-ink); }
+.status.em_avaliacao { color: var(--purple); }
 .status.cancelada { color: var(--muted); }
+.trabalho-secoes p { white-space: pre-wrap; margin: 0 0 12px; }
+.figuras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+.figuras figure { margin: 0; }
+.figuras img { width: 100%; height: 180px; object-fit: contain; background: white; border: 1px solid var(--line); }
+.figuras figcaption { font-size: 0.9rem; color: var(--muted); }
 
 dialog {
   border: 0;
@@ -383,7 +389,7 @@ dialog::backdrop { background: rgba(22, 22, 22, 0.48); }
   .admin-side { position: static; }
   .admin-menu { flex-direction: row; overflow: auto; }
   .admin-menu button, .admin-side .sair { width: auto; white-space: nowrap; }
-  .passos, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .passos, .grid-2, .grid-3, .figuras { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
   .item-prog { grid-template-columns: 1fr; }
   .item-acao { text-align: left; }
