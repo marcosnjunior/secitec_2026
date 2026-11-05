@@ -19,6 +19,7 @@ const state = {
   trabalhosErro: "",
   trabalhoAberto: null,
   filtro: { evento: "", status: "", q: "" },
+  buscaCheckin: "",
 };
 let ouvintes = false;
 
@@ -228,6 +229,7 @@ function montarApp() {
           <button type="button" data-action="secao" data-secao="atividades">Atividades</button>
           <button type="button" data-action="secao" data-secao="inscricoes">Inscrições</button>
           <button type="button" data-action="secao" data-secao="organizadores">Organizadores</button>
+          ${state.perfil.funcao === "coordenacao" ? `<button type="button" data-action="secao" data-secao="checkin">Check-in</button>` : ""}
           ${state.perfil.funcao === "coordenacao" ? `<button type="button" data-action="secao" data-secao="trabalhos">Trabalhos</button>` : ""}
           ${state.perfil.pode_avaliar_trabalhos ? `<button type="button" data-action="secao" data-secao="avaliacoes">Avaliações</button>` : ""}
           <button type="button" data-action="secao" data-secao="certificados">Certificados</button>
@@ -292,11 +294,65 @@ function render() {
   if (state.secao === "painel") box.innerHTML = htmlPainel();
   else if (state.secao === "atividades") box.innerHTML = htmlAtividades();
   else if (state.secao === "inscricoes") renderInscricoes(true);
+  else if (state.secao === "checkin") box.innerHTML = htmlCheckin();
   else if (state.secao === "organizadores") box.innerHTML = htmlOrganizadores();
   else if (state.secao === "trabalhos") box.innerHTML = htmlTrabalhos();
   else if (state.secao === "avaliacoes") box.innerHTML = htmlAvaliacoes();
   else if (state.secao === "certificados") box.innerHTML = htmlCertificados();
   if (state.secao === "trabalhos" || state.secao === "avaliacoes") preencherPdfs();
+}
+
+function htmlCheckin() {
+  return `
+    <h1>Check-in</h1>
+    <p>No dia de início do evento, 23 de novembro, busque a pessoa inscrita e confirme a presença. As inscrições confirmadas passam a presente e o certificado fica disponível na conta dela. Quem está só na lista de espera não entra neste check-in.</p>
+    <label class="field">Nome, e-mail ou CPF
+      <input id="checkin-q" value="${esc(state.buscaCheckin)}" placeholder="Buscar participante inscrito" autocomplete="off">
+    </label>
+    <div id="checkin-lista">${htmlListaCheckin()}</div>`;
+}
+
+function pessoasCheckin() {
+  const q = state.buscaCheckin.trim().toLowerCase();
+  const dig = digitos(q);
+  const mapa = new Map();
+  for (const item of state.inscricoes) {
+    const pessoa = item.participantes;
+    if (!pessoa) continue;
+    if (!mapa.has(pessoa.id)) mapa.set(pessoa.id, { pessoa, itens: [] });
+    mapa.get(pessoa.id).itens.push(item);
+  }
+  let lista = [...mapa.values()];
+  if (q) {
+    lista = lista.filter(({ pessoa }) => {
+      const nome = (pessoa.nome || "").toLowerCase();
+      const email = (pessoa.email || "").toLowerCase();
+      return nome.includes(q) || email.includes(q) || (dig.length >= 3 && (pessoa.cpf || "").includes(dig));
+    });
+  }
+  lista.sort((a, b) => a.pessoa.nome.localeCompare(b.pessoa.nome, "pt-BR"));
+  return lista;
+}
+
+function htmlListaCheckin() {
+  const lista = pessoasCheckin();
+  if (!state.buscaCheckin.trim()) {
+    return `<p class="empty">${lista.length} pessoa(s) inscrita(s). Digite o nome, o e-mail ou o CPF para localizar.</p>`;
+  }
+  if (lista.length === 0) return `<p class="empty">Nenhuma pessoa inscrita encontrada.</p>`;
+  return lista.map(({ pessoa, itens }) => {
+    const confirmadas = itens.filter((item) => item.status === "confirmada").length;
+    const presentes = itens.filter((item) => item.status === "presente").length;
+    const encerrado = confirmadas === 0 && pessoa.checkin_em;
+    return `
+      <article class="painel-branco">
+        <h2>${esc(pessoa.nome)}</h2>
+        <p>${esc(pessoa.email)} · CPF ${esc(formatCpf(pessoa.cpf))}</p>
+        <p>${pessoa.checkin_em ? `Check-in em ${esc(formatarQuando(pessoa.checkin_em))}.` : "Ainda sem check-in."} ${presentes} presença(s), ${confirmadas} confirmação(ões) em aberto.</p>
+        <ul>${itens.map((item) => `<li>${esc(item.eventos?.titulo || "Atividade")} — <span class="status ${esc(item.status)}">${esc(STATUS[item.status] || item.status)}</span></li>`).join("")}</ul>
+        <button type="button" class="btn btn-primary" data-action="checkin" data-id="${esc(pessoa.id)}" ${encerrado ? "disabled" : ""}>Confirmar presença</button>
+      </article>`;
+  }).join("");
 }
 
 function htmlPainel() {
@@ -310,7 +366,7 @@ function htmlPainel() {
       <article class="stat"><b>${presentes}</b> presenças</article>
       <article class="stat"><b>${state.certificados.length}</b> certificados</article>
     </div>
-    ${state.perfil.funcao === "coordenacao" ? `<p>${state.trabalhos.filter((item) => item.status === "submetido" || item.status === "com_coordenacao").length} trabalho(s) aguardando encaminhamento.</p>${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}` : ""}
+    ${state.perfil.funcao === "coordenacao" ? `<p><button type="button" class="btn btn-small btn-dark" data-action="secao" data-secao="checkin">Check-in do dia 23</button> ${state.trabalhos.filter((item) => item.status === "submetido" || item.status === "com_coordenacao").length} trabalho(s) aguardando encaminhamento.</p>${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}` : ""}
     <h2>Publicadas</h2>
     ${proximas.length === 0
       ? `<p class="empty">Nenhuma atividade publicada. Cadastre a primeira em Atividades.</p>`
@@ -943,6 +999,7 @@ async function onClick(evento) {
     } else if (action === "publicar") await alternarPublicacao(id);
     else if (action === "excluir") await excluirEvento(id);
     else if (action === "status") await mudarStatus(id, botao.dataset.status);
+    else if (action === "checkin") await fazerCheckin(id);
     else if (action === "marcar-presentes") await marcarPresentes(id);
     else if (action === "promover") await promoverEspera(id);
     else if (action === "emitir-part") await emitirParticipante(id);
@@ -986,6 +1043,11 @@ function onInput(evento) {
   if (evento.target?.id === "filtro-q") {
     state.filtro.q = evento.target.value;
     pintarInscricoes();
+  }
+  if (evento.target?.id === "checkin-q") {
+    state.buscaCheckin = evento.target.value;
+    const lista = document.getElementById("checkin-lista");
+    if (lista) lista.innerHTML = htmlListaCheckin();
   }
 }
 
@@ -1042,6 +1104,18 @@ async function excluirEvento(id) {
     throw error;
   }
   toast("Atividade excluída.");
+  await recarregar();
+}
+
+async function fazerCheckin(id) {
+  const pessoa = state.inscricoes.find((item) => item.participantes?.id === id)?.participantes;
+  const nome = pessoa?.nome || "esta pessoa";
+  if (!confirm(`Confirmar a presença de ${nome}? As inscrições confirmadas recebem o certificado.`)) return;
+  const { data, error } = await supabase.rpc("registrar_checkin", { p_participante: id });
+  if (error) throw error;
+  toast(data?.presencas
+    ? `Presença confirmada. ${data.presencas} certificado(s) liberado(s).`
+    : "Check-in registrado. Não havia inscrição confirmada em aberto.");
   await recarregar();
 }
 

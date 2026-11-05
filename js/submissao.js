@@ -1,46 +1,51 @@
 import { configError, configured, mensagemErro, supabase } from "./api.js";
 import {
   EIXOS, MOVIMENTOS, RECOMENDACOES, STATUS_TRABALHO,
-  cpfValido, digitos, esc, formatarQuando, htmlAviso, initNav, maskCpf, matriculaNormalizada, optionsHtml, toast,
+  esc, formatarQuando, htmlAviso, initNav, optionsHtml, toast,
 } from "./ui.js";
 
 initNav();
 
 const form = document.getElementById("form-trabalho");
-const consulta = document.getElementById("form-consulta");
+const bloqueio = document.getElementById("bloqueio");
 const aviso = document.getElementById("aviso");
 const recibo = document.getElementById("recibo");
 const resultado = document.getElementById("resultado");
 const LIMITE_PDF = 20 * 1024 * 1024;
+let participante = null;
 
 form.eixo.innerHTML = optionsHtml(EIXOS, "secitec");
-if (!configured) aviso.innerHTML = htmlAviso(configError);
-
-form.addEventListener("input", (evento) => {
-  if (evento.target.dataset.mask === "cpf") evento.target.value = maskCpf(evento.target.value);
-});
-consulta.addEventListener("input", (evento) => {
-  if (evento.target.dataset.mask === "cpf") evento.target.value = maskCpf(evento.target.value);
-});
 form.addEventListener("submit", enviar);
-consulta.addEventListener("submit", acompanhar);
 
-function documentoAutorValido() {
-  const cpf = digitos(form.autor_cpf.value);
-  const matricula = matriculaNormalizada(form.autor_matricula.value);
-  if (!cpf && !matricula) {
-    toast("Informe o CPF ou a matrícula.", "err");
-    return false;
+if (!configured) aviso.innerHTML = htmlAviso(configError);
+else iniciar();
+
+async function iniciar() {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) {
+    mostrarBloqueio();
+    return;
   }
-  if (cpf && !cpfValido(cpf)) {
-    toast("CPF inválido.", "err");
-    return false;
+  const area = await supabase.rpc("minha_area");
+  if (area.error) {
+    aviso.innerHTML = `<p class="erro">${esc(mensagemErro(area.error))}</p>`;
+    mostrarBloqueio();
+    return;
   }
-  if (matricula && (matricula.length < 3 || matricula.length > 30)) {
-    toast("Matrícula inválida.", "err");
-    return false;
+  if (!area.data?.participante) {
+    mostrarBloqueio();
+    return;
   }
-  return true;
+  participante = area.data.participante;
+  bloqueio.hidden = true;
+  form.hidden = false;
+  document.getElementById("autor-conta").textContent = `Autor: ${participante.nome} · ${participante.email}`;
+  pintarTrabalhos(area.data.trabalhos || []);
+}
+
+function mostrarBloqueio() {
+  bloqueio.hidden = false;
+  form.hidden = true;
 }
 
 function pdfDoForm() {
@@ -60,40 +65,23 @@ async function enviar(evento) {
     toast("Não foi possível enviar.", "err");
     return;
   }
-  if (!form.reportValidity()) return;
-  if (form.autor_nome.value.trim().split(/\s+/).length < 2) {
-    toast("Informe nome e sobrenome do autor.", "err");
+  if (!participante) {
+    toast("Entre com a conta da inscrição para enviar o artigo.", "err");
     return;
   }
-  if (!documentoAutorValido()) return;
+  if (!form.reportValidity()) return;
   const pdf = pdfDoForm();
   if (pdf.erro) {
     toast(pdf.erro, "err");
     return;
   }
-  if (!configured) {
-    toast("Conecte o Supabase em js/config.js para enviar o trabalho.", "err");
-    return;
-  }
   const botao = form.querySelector("[type=submit]");
   botao.disabled = true;
-  const cpf = digitos(form.autor_cpf.value);
-  const matricula = matriculaNormalizada(form.autor_matricula.value);
-  const email = form.autor_email.value.trim().toLowerCase();
-  const identidade = {
-    p_cpf: cpf || null,
-    p_matricula: matricula || null,
-    p_email: email,
-  };
   const { data, error } = await supabase.rpc("submeter_trabalho", {
     p_dados: {
       website: "",
       titulo: form.titulo.value.trim(),
       eixo: form.eixo.value,
-      autor_nome: form.autor_nome.value.trim(),
-      autor_email: email,
-      autor_cpf: cpf || null,
-      autor_matricula: matricula || null,
     },
   });
   if (error || !data?.id) {
@@ -107,18 +95,30 @@ async function enviar(evento) {
     upsert: false,
   });
   if (envio.error) {
-    await supabase.rpc("descartar_submissao", { p_trabalho: data.id, ...identidade });
+    await supabase.rpc("descartar_submissao", {
+      p_trabalho: data.id,
+      p_cpf: participante.cpf,
+      p_matricula: null,
+      p_email: participante.email,
+    });
     botao.disabled = false;
     toast(mensagemErro(envio.error), "err");
     return;
   }
   const anexo = await supabase.rpc("anexar_pdf_trabalho", {
     p_trabalho: data.id,
-    ...identidade,
+    p_cpf: participante.cpf,
+    p_matricula: null,
+    p_email: participante.email,
     p_caminho: caminho,
   });
   if (anexo.error) {
-    await supabase.rpc("descartar_submissao", { p_trabalho: data.id, ...identidade });
+    await supabase.rpc("descartar_submissao", {
+      p_trabalho: data.id,
+      p_cpf: participante.cpf,
+      p_matricula: null,
+      p_email: participante.email,
+    });
     botao.disabled = false;
     toast(mensagemErro(anexo.error), "err");
     return;
@@ -126,60 +126,18 @@ async function enviar(evento) {
   botao.disabled = false;
   form.reset();
   form.eixo.value = "secitec";
-  recibo.innerHTML = reciboHtml(data.protocolo);
-  consulta.email.value = email;
-  if (cpf) consulta.cpf.value = maskCpf(cpf);
-  if (matricula) consulta.matricula.value = matricula;
+  recibo.innerHTML = `<article class="painel-branco"><h2>Protocolo ${esc(data.protocolo)}</h2><p>O PDF foi enviado. A coordenação vai conferir antes de encaminhar para avaliação. O andamento aparece abaixo, nesta mesma conta. O nome do professor avaliador não é mostrado.</p></article>`;
   toast("Trabalho enviado.");
+  const area = await supabase.rpc("minha_area");
+  if (!area.error) pintarTrabalhos(area.data?.trabalhos || []);
 }
 
-function reciboHtml(protocolo) {
-  return `<article class="painel-branco"><h2>Protocolo ${esc(protocolo)}</h2><p>O PDF foi enviado. A coordenação vai conferir antes de encaminhar para avaliação. Acompanhe o status abaixo com o mesmo e-mail e o CPF ou a matrícula. O nome do professor avaliador não é mostrado.</p></article>`;
-}
-
-async function acompanhar(evento) {
-  evento.preventDefault();
-  const cpf = digitos(consulta.cpf.value);
-  const matricula = matriculaNormalizada(consulta.matricula.value);
-  const email = consulta.email.value.trim().toLowerCase();
-  if (!cpf && !matricula) {
-    toast("Informe o CPF ou a matrícula.", "err");
-    return;
-  }
-  if (cpf && !cpfValido(cpf)) {
-    toast("CPF inválido.", "err");
-    return;
-  }
-  if (matricula && (matricula.length < 3 || matricula.length > 30)) {
-    toast("Matrícula inválida.", "err");
-    return;
-  }
-  if (!email.includes("@")) {
-    toast("Informe o e-mail usado na submissão.", "err");
-    return;
-  }
-  if (!configured) {
-    toast("Conecte o Supabase em js/config.js para consultar o trabalho.", "err");
-    return;
-  }
-  const botao = consulta.querySelector("[type=submit]");
-  botao.disabled = true;
-  const { data, error } = await supabase.rpc("consultar_trabalhos_aluno", {
-    p_cpf: cpf || null,
-    p_matricula: matricula || null,
-    p_email: email,
-  });
-  botao.disabled = false;
-  if (error) {
-    toast(mensagemErro(error), "err");
-    return;
-  }
-  const lista = data || [];
+function pintarTrabalhos(lista) {
   if (!lista.length) {
-    resultado.innerHTML = `<p class="empty">Nenhum trabalho encontrado com estes dados.</p>`;
+    resultado.innerHTML = `<p class="empty">Nenhum artigo enviado com esta conta.</p>`;
     return;
   }
-  resultado.innerHTML = lista.map((trabalho) => `
+  resultado.innerHTML = `<h2>Seus trabalhos</h2>${lista.map((trabalho) => `
     <article class="painel-branco">
       <p><span class="status ${esc(trabalho.status)}">${esc(STATUS_TRABALHO[trabalho.status] || trabalho.status)}</span></p>
       <h2>${esc(trabalho.protocolo)}</h2>
@@ -192,5 +150,5 @@ async function acompanhar(evento) {
           ${item.parecer ? `<br>${esc(item.parecer)}` : ""}
         </li>`).join("")}
       </ol>
-    </article>`).join("");
+    </article>`).join("")}`;
 }

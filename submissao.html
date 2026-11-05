@@ -33,14 +33,19 @@
   <main id="conteudo" class="wrap">
     <section class="page-intro">
       <h1>Trabalhos científicos</h1>
-      <p class="lede">Envie o artigo em PDF, com CPF ou matrícula e o e-mail. A coordenação confere e encaminha para avaliação. Você acompanha cada etapa, sem ver quem é o professor avaliador.</p>
+      <p class="lede">Entre com a conta da inscrição para enviar o artigo em PDF. A coordenação confere e encaminha para avaliação. Você acompanha cada etapa, sem ver quem é o professor avaliador.</p>
     </section>
     <div id="aviso"></div>
-    <form id="form-trabalho" class="painel-branco">
+    <div id="bloqueio" class="painel-branco" hidden>
+      <h2>Entre para enviar o artigo</h2>
+      <p>A submissão usa a mesma conta da inscrição. Crie a conta, escolha uma atividade e volte a esta página.</p>
+      <p><a class="btn btn-dark" href="inscricao.html">Ir para a inscrição</a></p>
+    </div>
+    <form id="form-trabalho" class="painel-branco" hidden>
       <div class="hp" aria-hidden="true">
         <label>Site <input name="website" tabindex="-1" autocomplete="off"></label>
       </div>
-      <h2>Identificação</h2>
+      <p id="autor-conta" class="hint"></p>
       <div class="grid-2">
         <label class="field span-2">Título
           <input name="titulo" required minlength="10" maxlength="180">
@@ -48,42 +53,14 @@
         <label class="field">Eixo
           <select name="eixo" required></select>
         </label>
-        <label class="field">Nome do autor
-          <input name="autor_nome" required autocomplete="name">
-        </label>
-        <label class="field">E-mail do autor
-          <input name="autor_email" type="email" required autocomplete="email">
-        </label>
-        <label class="field">CPF do autor
-          <input name="autor_cpf" inputmode="numeric" data-mask="cpf" autocomplete="off">
-        </label>
-        <label class="field">Matrícula do autor
-          <input name="autor_matricula" maxlength="30" autocomplete="off">
-        </label>
         <label class="field span-2">Artigo em PDF
           <input name="pdf" type="file" accept="application/pdf,.pdf" required>
-          <span class="hint">Um arquivo PDF, de até 20 MB.</span>
+          <span class="hint">Um arquivo PDF, de até 20 MB. O autor é a pessoa da conta.</span>
         </label>
       </div>
-      <p class="hint">Informe o CPF, a matrícula ou os dois. Use os mesmos dados para consultar o andamento.</p>
       <button class="btn btn-primary" type="submit">Enviar trabalho</button>
     </form>
     <div id="recibo"></div>
-    <form id="form-consulta" class="painel-branco">
-      <h2>Acompanhar submissão</h2>
-      <div class="grid-2">
-        <label class="field">CPF
-          <input name="cpf" inputmode="numeric" data-mask="cpf" autocomplete="off">
-        </label>
-        <label class="field">Matrícula
-          <input name="matricula" maxlength="30" autocomplete="off">
-        </label>
-        <label class="field span-2">E-mail usado na submissão
-          <input name="email" type="email" required autocomplete="email">
-        </label>
-      </div>
-      <button class="btn btn-dark" type="submit">Ver status</button>
-    </form>
     <div id="resultado"></div>
   </main>
   <footer class="site-footer">

@@ -247,6 +247,11 @@ create table if not exists public.participantes (
   constraint participantes_email_ok check (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$')
 );
 
+alter table public.participantes add column if not exists user_id uuid references auth.users (id) on delete set null;
+alter table public.participantes add column if not exists checkin_em timestamptz;
+create unique index if not exists participantes_user_id_unico
+  on public.participantes (user_id) where user_id is not null;
+
 create table if not exists public.inscricoes (
   id uuid primary key default gen_random_uuid(),
   participante_id uuid not null references public.participantes (id) on delete cascade,
@@ -646,6 +651,7 @@ declare
   v_existente public.status_inscricao;
   v_msg text;
   v_ok boolean;
+  v_user uuid;
 begin
   v_cpf := regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g');
   v_email := lower(trim(coalesce(p_email, '')));
@@ -661,6 +667,15 @@ begin
   end if;
   if p_categoria not in ('estudante', 'servidor', 'professor', 'comunidade') then
     raise exception 'Categoria inválida';
+  end if;
+  if auth.uid() is null then
+    raise exception 'Entre com e-mail e senha para se inscrever';
+  end if;
+  if public.is_organizador() then
+    raise exception 'Esta conta é da organização. Cadastre a participação com outro e-mail';
+  end if;
+  if v_email is distinct from public.email_da_sessao() then
+    raise exception 'Use o e-mail da sua conta';
   end if;
 
   v_ids := array(
@@ -683,25 +698,43 @@ begin
     raise exception 'Este e-mail já está cadastrado com outro CPF';
   end if;
 
-  select id, email into v_part, v_email_db
+  select id, email, user_id into v_part, v_email_db, v_user
   from public.participantes
   where cpf = v_cpf;
 
+  if v_part is not null and v_user is not null and v_user <> auth.uid() then
+    raise exception 'Este CPF já está ligado a outra conta';
+  end if;
   if v_part is not null and lower(v_email_db) <> v_email then
     raise exception 'Este CPF já está cadastrado com outro e-mail';
   end if;
+  if exists (
+    select 1 from public.participantes
+    where user_id = auth.uid() and (v_part is null or id <> v_part)
+  ) then
+    raise exception 'Esta conta já está cadastrada com outro CPF';
+  end if;
 
   if v_part is null then
-    insert into public.participantes (nome, email, cpf, telefone, instituicao, categoria)
+    insert into public.participantes (nome, email, cpf, telefone, instituicao, categoria, user_id)
     values (
       trim(p_nome),
       v_email,
       v_cpf,
       nullif(trim(coalesce(p_telefone, '')), ''),
       nullif(trim(coalesce(p_instituicao, '')), ''),
-      p_categoria::public.categoria_participante
+      p_categoria::public.categoria_participante,
+      auth.uid()
     )
     returning id into v_part;
+  else
+    update public.participantes
+    set user_id = auth.uid(),
+        nome = trim(p_nome),
+        telefone = nullif(trim(coalesce(p_telefone, '')), ''),
+        instituicao = nullif(trim(coalesce(p_instituicao, '')), ''),
+        categoria = p_categoria::public.categoria_participante
+    where id = v_part;
   end if;
 
   foreach v_evento in array v_ids loop
@@ -788,6 +821,125 @@ begin
     'participante_id', v_part,
     'nome', trim(p_nome),
     'resultados', v_result
+  );
+end;
+$$;
+
+create or replace function public.minha_area()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_part public.participantes;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+  select * into v_part from public.participantes where user_id = auth.uid();
+  if not found then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'participante', jsonb_build_object(
+      'id', v_part.id,
+      'nome', v_part.nome,
+      'email', v_part.email,
+      'cpf', v_part.cpf,
+      'telefone', v_part.telefone,
+      'instituicao', v_part.instituicao,
+      'categoria', v_part.categoria,
+      'checkin_em', v_part.checkin_em
+    ),
+    'inscricoes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', i.id,
+        'status', i.status,
+        'evento_id', e.id,
+        'titulo', e.titulo,
+        'data', e.data,
+        'horario_inicio', e.horario_inicio,
+        'localizacao', e.localizacao
+      ) order by e.data, e.horario_inicio)
+      from public.inscricoes i
+      join public.eventos e on e.id = i.evento_id
+      where i.participante_id = v_part.id
+    ), '[]'::jsonb),
+    'certificados', coalesce((
+      select jsonb_agg(public.certificado_json(c) order by c.emitido_em desc)
+      from public.certificados c
+      where c.participante_id = v_part.id
+        and c.tipo = 'participante'
+    ), '[]'::jsonb),
+    'trabalhos', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'protocolo', t.protocolo,
+        'titulo', t.titulo,
+        'eixo', t.eixo,
+        'status', t.status,
+        'criado_em', t.created_at,
+        'tem_pdf', t.arquivo is not null,
+        'historico', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'quando', m.ocorrido_em,
+            'tipo', m.tipo,
+            'recomendacao', m.recomendacao,
+            'parecer', m.parecer
+          ) order by m.ocorrido_em)
+          from public.trabalho_movimentos m
+          where m.trabalho_id = t.id
+        ), '[]'::jsonb)
+      ) order by t.created_at desc)
+      from public.trabalhos t
+      where t.autor_email = lower(v_part.email)
+        and t.autor_cpf = v_part.cpf
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.registrar_checkin(p_participante uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_nome text;
+  v_quando timestamptz;
+  v_presencas integer;
+begin
+  if not public.is_coordenacao() then
+    raise exception 'Somente a coordenação confirma a presença';
+  end if;
+  if not exists (
+    select 1 from public.inscricoes where participante_id = p_participante
+  ) then
+    raise exception 'Esta pessoa não tem inscrição';
+  end if;
+
+  update public.participantes
+  set checkin_em = coalesce(checkin_em, now())
+  where id = p_participante
+  returning nome, checkin_em into v_nome, v_quando;
+
+  if not found then
+    raise exception 'Participante não encontrado';
+  end if;
+
+  update public.inscricoes
+  set status = 'presente'
+  where participante_id = p_participante
+    and status = 'confirmada';
+  get diagnostics v_presencas = row_count;
+
+  return jsonb_build_object(
+    'nome', v_nome,
+    'checkin_em', v_quando,
+    'presencas', v_presencas
   );
 end;
 $$;
@@ -1248,25 +1400,25 @@ begin
     raise exception 'Eixo inválido';
   end;
 
-  v_nome := btrim(coalesce(p_dados->>'autor_nome', ''));
-  if char_length(v_nome) < 5 or v_nome !~ '\S\s+\S' then
-    raise exception 'Informe nome e sobrenome do autor';
+  if auth.uid() is null then
+    raise exception 'Entre na sua conta para enviar o artigo';
   end if;
-  v_email := lower(btrim(coalesce(p_dados->>'autor_email', '')));
-  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-    raise exception 'E-mail do autor inválido';
+  select nome, lower(email), cpf
+    into v_nome, v_email, v_cpf
+  from public.participantes
+  where user_id = auth.uid();
+  if not found then
+    raise exception 'Crie sua conta e inscreva-se em uma atividade antes de enviar o artigo';
   end if;
-  v_cpf := nullif(regexp_replace(coalesce(p_dados->>'autor_cpf', ''), '\D', '', 'g'), '');
-  v_matricula := nullif(upper(regexp_replace(coalesce(p_dados->>'autor_matricula', ''), '\s+', '', 'g')), '');
-  if v_cpf is not null and not public.cpf_valido(v_cpf) then
-    raise exception 'CPF inválido';
+  if not exists (
+    select 1 from public.inscricoes i
+    join public.participantes p on p.id = i.participante_id
+    where p.user_id = auth.uid()
+      and i.status <> 'cancelada'
+  ) then
+    raise exception 'Inscreva-se em uma atividade antes de enviar o artigo';
   end if;
-  if v_cpf is null and v_matricula is null then
-    raise exception 'Informe o CPF ou a matrícula';
-  end if;
-  if v_matricula is not null and char_length(v_matricula) not between 3 and 30 then
-    raise exception 'Matrícula inválida';
-  end if;
+  v_matricula := null;
   if char_length(btrim(coalesce(p_dados->>'titulo', ''))) not between 10 and 180 then
     raise exception 'O título deve ter entre 10 e 180 caracteres';
   end if;
@@ -1318,9 +1470,6 @@ set search_path = public
 as $$
 declare
   v_trabalho public.trabalhos;
-  v_cpf text;
-  v_matricula text;
-  v_email text;
 begin
   perform pg_advisory_xact_lock(hashtext(p_trabalho::text)::bigint);
   select * into v_trabalho from public.trabalhos where id = p_trabalho for update;
@@ -1331,13 +1480,12 @@ begin
     raise exception 'Este trabalho já tem PDF';
   end if;
 
-  v_email := lower(btrim(coalesce(p_email, '')));
-  v_cpf := nullif(regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g'), '');
-  v_matricula := nullif(upper(regexp_replace(coalesce(p_matricula, ''), '\s+', '', 'g')), '');
-  if v_email <> v_trabalho.autor_email
-     or (v_cpf is not null and v_cpf is distinct from v_trabalho.autor_cpf)
-     or (v_matricula is not null and v_matricula is distinct from v_trabalho.autor_matricula)
-     or (v_cpf is null and v_matricula is null) then
+  if not exists (
+    select 1 from public.participantes p
+    where p.user_id = auth.uid()
+      and lower(p.email) = v_trabalho.autor_email
+      and p.cpf = v_trabalho.autor_cpf
+  ) then
     raise exception 'Não foi possível anexar o PDF';
   end if;
   if p_caminho !~ ('^' || p_trabalho::text || '/[0-9a-f-]{36}\.pdf$') then
@@ -1368,23 +1516,19 @@ set search_path = public
 as $$
 declare
   v_trabalho public.trabalhos;
-  v_cpf text;
-  v_matricula text;
-  v_email text;
 begin
   select * into v_trabalho from public.trabalhos where id = p_trabalho for update;
   if not found then
     return;
   end if;
-  v_email := lower(btrim(coalesce(p_email, '')));
-  v_cpf := nullif(regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g'), '');
-  v_matricula := nullif(upper(regexp_replace(coalesce(p_matricula, ''), '\s+', '', 'g')), '');
   if v_trabalho.status = 'submetido'
      and v_trabalho.arquivo is null
-     and v_email = v_trabalho.autor_email
-     and (v_cpf is not distinct from v_trabalho.autor_cpf or v_cpf is null)
-     and (v_matricula is not distinct from v_trabalho.autor_matricula or v_matricula is null)
-     and (v_cpf is not null or v_matricula is not null) then
+     and exists (
+       select 1 from public.participantes p
+       where p.user_id = auth.uid()
+         and lower(p.email) = v_trabalho.autor_email
+         and p.cpf = v_trabalho.autor_cpf
+     ) then
     delete from public.trabalhos where id = p_trabalho;
   end if;
 end;
@@ -1657,7 +1801,7 @@ using (public.is_coordenacao());
 
 drop policy if exists trabalhos_envio_arquivo on storage.objects;
 create policy trabalhos_envio_arquivo on storage.objects
-for insert to anon, authenticated
+for insert to authenticated
 with check (
   bucket_id = 'trabalhos'
   and (storage.foldername(name))[1] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -1706,7 +1850,7 @@ revoke all on function public.estado_acesso() from public;
 revoke all on function public.criar_primeiro_organizador(text, text, text, text, text, integer) from public;
 revoke all on function public.vincular_organizador() from public;
 revoke all on function public.programacao_publica() from public;
-revoke all on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) from public;
+revoke all on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) from public, anon;
 revoke all on function public.novo_codigo_certificado() from public;
 revoke all on function public.certificado_json(public.certificados) from public;
 revoke all on function public.emitir_certificado_participante(uuid) from public;
@@ -1719,13 +1863,15 @@ revoke all on function public.tg_ultimo_organizador() from public;
 revoke all on function public.tg_emitir_certificado_presenca() from public;
 revoke all on function public.is_coordenacao() from public;
 revoke all on function public.organizador_atual() from public;
-revoke all on function public.submeter_trabalho(jsonb) from public;
-revoke all on function public.anexar_pdf_trabalho(uuid, text, text, text, text) from public;
-revoke all on function public.descartar_submissao(uuid, text, text, text) from public;
-revoke all on function public.consultar_trabalhos_aluno(text, text, text) from public;
+revoke all on function public.submeter_trabalho(jsonb) from public, anon;
+revoke all on function public.anexar_pdf_trabalho(uuid, text, text, text, text) from public, anon;
+revoke all on function public.descartar_submissao(uuid, text, text, text) from public, anon;
+revoke all on function public.consultar_trabalhos_aluno(text, text, text) from public, anon, authenticated;
 revoke all on function public.encaminhar_trabalho(uuid, uuid) from public;
 revoke all on function public.cancelar_encaminhamento(uuid) from public;
 revoke all on function public.devolver_parecer(uuid, text, text) from public;
+revoke all on function public.minha_area() from public;
+revoke all on function public.registrar_checkin(uuid) from public;
 
 grant execute on function public.cpf_valido(text) to anon, authenticated;
 grant execute on function public.email_da_sessao() to authenticated;
@@ -1734,7 +1880,9 @@ grant execute on function public.estado_acesso() to anon, authenticated;
 grant execute on function public.criar_primeiro_organizador(text, text, text, text, text, integer) to authenticated;
 grant execute on function public.vincular_organizador() to authenticated;
 grant execute on function public.programacao_publica() to anon, authenticated;
-grant execute on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) to anon, authenticated;
+grant execute on function public.inscrever_participante(text, text, text, text, text, text, uuid[]) to authenticated;
+grant execute on function public.minha_area() to authenticated;
+grant execute on function public.registrar_checkin(uuid) to authenticated;
 grant execute on function public.certificado_json(public.certificados) to anon, authenticated;
 grant execute on function public.emitir_certificado_participante(uuid) to authenticated;
 grant execute on function public.emitir_certificado_organizador(uuid) to authenticated;
@@ -1746,10 +1894,9 @@ grant execute on function public.tg_ultimo_organizador() to authenticated;
 grant execute on function public.tg_emitir_certificado_presenca() to authenticated;
 grant execute on function public.is_coordenacao() to authenticated;
 grant execute on function public.organizador_atual() to authenticated;
-grant execute on function public.submeter_trabalho(jsonb) to anon, authenticated;
-grant execute on function public.anexar_pdf_trabalho(uuid, text, text, text, text) to anon, authenticated;
-grant execute on function public.descartar_submissao(uuid, text, text, text) to anon, authenticated;
-grant execute on function public.consultar_trabalhos_aluno(text, text, text) to anon, authenticated;
+grant execute on function public.submeter_trabalho(jsonb) to authenticated;
+grant execute on function public.anexar_pdf_trabalho(uuid, text, text, text, text) to authenticated;
+grant execute on function public.descartar_submissao(uuid, text, text, text) to authenticated;
 grant execute on function public.encaminhar_trabalho(uuid, uuid) to authenticated;
 grant execute on function public.cancelar_encaminhamento(uuid) to authenticated;
 grant execute on function public.devolver_parecer(uuid, text, text) to authenticated;

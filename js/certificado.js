@@ -26,7 +26,31 @@ window.addEventListener("beforeprint", () => {
 window.addEventListener("afterprint", () => document.body.classList.remove("printing-cert"));
 
 if (!configured) aviso.innerHTML = htmlAviso(configError);
+if (configured) carregarMeus();
 if (codigoUrl && configured) buscarCodigo(codigoUrl);
+
+async function carregarMeus() {
+  const meus = document.getElementById("meus");
+  const { data: sessao } = await supabase.auth.getSession();
+  if (!sessao.session) {
+    meus.innerHTML = `<p class="painel-branco no-print">Participante: <a href="inscricao.html">entre na sua conta</a> para imprimir o certificado.</p>`;
+    return;
+  }
+  const area = await supabase.rpc("minha_area");
+  if (area.error || !area.data?.participante) return;
+  const lista = area.data.certificados || [];
+  if (!lista.length) {
+    meus.innerHTML = `<p class="painel-branco no-print">Olá, ${esc(area.data.participante.nome)}. O certificado aparece aqui depois que a coordenação confirmar a sua presença no início do evento.</p>`;
+    return;
+  }
+  meus.innerHTML = `
+    <div class="linha-acoes no-print">
+      <p>${lista.length} certificado(s) da sua conta.</p>
+      <button type="button" class="btn btn-dark" id="imprimir-meus">Imprimir ou salvar em PDF</button>
+    </div>
+    ${lista.map((cert) => certificadoHtml(cert, { modelo: false })).join("")}`;
+  document.getElementById("imprimir-meus").onclick = () => window.print();
+}
 
 async function buscar(evento) {
   evento.preventDefault();
