@@ -219,7 +219,17 @@ export function jaComecou(evento) {
   return inicio.getTime() <= Date.now();
 }
 
+// Se o link de recuperação de senha cair em outra página do site,
+// encaminha para senha.html mantendo o token que vem no fragmento da URL.
+function encaminharRecuperacao() {
+  const hash = location.hash || "";
+  if (!/type=recovery/.test(hash) || /senha\.html$/.test(location.pathname)) return false;
+  location.replace(new URL("senha.html", location.href).href + hash);
+  return true;
+}
+
 export function initNav() {
+  if (encaminharRecuperacao()) return;
   const botao = document.querySelector(".nav-toggle");
   const nav = document.querySelector(".nav");
   if (!botao || !nav) return;
