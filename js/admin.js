@@ -55,7 +55,6 @@ async function mostrarAcesso(mensagem = "") {
         <label class="field">E-mail <input name="email" type="email" autocomplete="username" required></label>
         <label class="field">Senha <input name="senha" type="password" autocomplete="current-password" required minlength="8"></label>
         <button class="btn btn-dark" type="submit">Entrar</button>
-        <p class="hint">Senha esquecida: a coordenação redefine em Authentication → Users, no painel do Supabase.</p>
       </form>
       <form id="form-criar" class="painel-branco">
         <h2>${primeiro ? "Criar a coordenação" : "Criar acesso"}</h2>

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=20261105">
 </head>
 <body>
   <a class="skip" href="#conteudo">Ir para o conteúdo</a>
@@ -32,42 +32,75 @@
   </header>
   <main id="conteudo">
     <section class="hero">
-      <div class="wrap hero-centro">
-        <img class="hero-logo" src="assets/logo-ifpb-conecta.jpg" alt="Marca do IFPB Conecta, com os eixos Semana da Inclusão, SECITEC, Festival a Moda e Consciência Negra.">
-        <p class="hero-data">23–27 <small>de novembro de 2026</small></p>
-        <p class="lede">Semana de ciência e tecnologia, junto com a Semana da Inclusão, o Festival a Moda e a Consciência Negra.</p>
-        <div class="hero-actions no-print">
-          <a class="btn btn-primary" href="#programacao">Ver programação</a>
-          <a class="btn btn-dark" href="inscricao.html">Fazer inscrição</a>
-          <a class="btn btn-dark" href="submissao.html">Submeter trabalho</a>
+      <div class="wrap hero-grid">
+        <div class="hero-texto">
+          <p class="kicker">Instituto Federal da Paraíba · Campus Pedras de Fogo</p>
+          <h1>IFPB Conecta 2026 <span>Semana da Inclusão · SECITEC · Festival a Moda · Consciência Negra</span></h1>
+          <p class="hero-data">23–27 <small>de novembro</small></p>
+          <p class="lede">Cinco dias de ciência, tecnologia, inclusão, moda e cultura em um só lugar. Veja a programação, inscreva-se nas atividades e receba o certificado na sua conta.</p>
+          <div class="hero-actions no-print">
+            <a class="btn btn-primary" href="#programacao">Ver programação</a>
+            <a class="btn btn-dark" href="inscricao.html">Fazer inscrição</a>
+            <a class="btn btn-ghost" href="submissao.html">Submeter trabalho</a>
+          </div>
+        </div>
+        <div class="hero-marca">
+          <div class="hero-card">
+            <img class="hero-logo" src="assets/logo-ifpb-conecta.jpg" alt="Marca do IFPB Conecta, com os eixos Semana da Inclusão, SECITEC, Festival a Moda e Consciência Negra.">
+          </div>
+          <ul class="contagem no-print" id="contagem-regressiva" aria-label="Contagem regressiva para o evento">
+            <li><b>--</b><small>dias</small></li>
+            <li><b>--</b><small>horas</small></li>
+            <li><b>--</b><small>min</small></li>
+            <li><b>--</b><small>seg</small></li>
+          </ul>
+          <p class="contagem-rotulo no-print" id="contagem-rotulo">Faltam para o início do evento</p>
         </div>
       </div>
     </section>
 
     <section class="wrap bloco">
-      <h2>Quatro eixos da semana</h2>
+      <div class="section-head">
+        <div>
+          <h2>Quatro eixos da semana</h2>
+          <p>Toque em um eixo para ver só as atividades dele na programação.</p>
+        </div>
+      </div>
       <div class="eixo-grid">
-        <article class="eixo semana_inclusao">
+        <a class="eixo semana_inclusao" href="?eixo=semana_inclusao#programacao">
+          <span class="eixo-icone" aria-hidden="true">SI</span>
           <h3>Semana da Inclusão</h3>
           <p>Acessibilidade, diversidade e permanência.</p>
-        </article>
-        <article class="eixo secitec">
+          <span class="eixo-link">Ver atividades</span>
+        </a>
+        <a class="eixo secitec" href="?eixo=secitec#programacao">
+          <span class="eixo-icone" aria-hidden="true">ST</span>
           <h3>SECITEC</h3>
           <p>Ciência, pesquisa, inovação e tecnologia.</p>
-        </article>
-        <article class="eixo festival_moda">
+          <span class="eixo-link">Ver atividades</span>
+        </a>
+        <a class="eixo festival_moda" href="?eixo=festival_moda#programacao">
+          <span class="eixo-icone" aria-hidden="true">FM</span>
           <h3>Festival a Moda</h3>
           <p>Oficinas, mostras e apresentações de moda.</p>
-        </article>
-        <article class="eixo consciencia_negra">
+          <span class="eixo-link">Ver atividades</span>
+        </a>
+        <a class="eixo consciencia_negra" href="?eixo=consciencia_negra#programacao">
+          <span class="eixo-icone" aria-hidden="true">CN</span>
           <h3>Consciência Negra</h3>
           <p>História, cultura e identidade negra.</p>
-        </article>
+          <span class="eixo-link">Ver atividades</span>
+        </a>
       </div>
     </section>
 
     <section class="wrap bloco no-print">
-      <h2>Como participar</h2>
+      <div class="section-head">
+        <div>
+          <h2>Como participar</h2>
+          <p>Uma conta só para inscrição, envio de artigo e certificado.</p>
+        </div>
+      </div>
       <ol class="passos">
         <li class="passo"><strong>1</strong><span>Escolha as atividades na programação. O horário, o local, as vagas e os avaliadores vêm do cadastro.</span></li>
         <li class="passo"><strong>2</strong><span>Crie sua conta com e-mail e senha e inscreva-se em ao menos uma atividade.</span></li>
@@ -96,11 +129,11 @@
   <footer class="site-footer">
     <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
     <div class="wrap footer-inner">
-      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026</p>
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026 · Campus Pedras de Fogo</p>
       <p>Semana da Inclusão · SECITEC Ciência e Tecnologia · Festival a Moda · Consciência Negra</p>
     </div>
   </footer>
   <div id="toasts" class="toast-wrap" aria-live="polite"></div>
-  <script type="module" src="js/home.js"></script>
+  <script type="module" src="js/home.js?v=20261105"></script>
 </body>
 </html>

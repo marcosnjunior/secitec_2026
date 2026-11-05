@@ -6,11 +6,14 @@ import {
 
 initNav();
 
-const estado = { eventos: [], dia: new URLSearchParams(location.search).get("dia") || "todos" };
+const params = new URLSearchParams(location.search);
+const estado = { eventos: [], dia: params.get("dia") || "todos", eixoInicial: params.get("eixo") || "" };
 const aviso = document.getElementById("aviso");
 const grade = document.getElementById("grade");
 
 document.getElementById("imprimir")?.addEventListener("click", () => window.print());
+
+iniciarContagem();
 
 if (!configured) {
   aviso.innerHTML = htmlAviso(configError);
@@ -74,8 +77,48 @@ function montarFiltros() {
     <label class="field">Busca
       <input id="f-q" type="search" placeholder="Título, local ou responsável">
     </label>`;
+  if (estado.eixoInicial && EIXOS[estado.eixoInicial]) {
+    filtros.querySelector("#f-eixo").value = estado.eixoInicial;
+  }
   filtros.onchange = render;
   filtros.oninput = render;
+}
+
+function iniciarContagem() {
+  const caixa = document.getElementById("contagem-regressiva");
+  const rotulo = document.getElementById("contagem-rotulo");
+  if (!caixa || !rotulo) return;
+  const inicio = new Date("2026-11-23T08:00:00-03:00").getTime();
+  const fim = new Date("2026-11-27T22:00:00-03:00").getTime();
+  const celulas = caixa.querySelectorAll("b");
+  const pad = (n) => String(n).padStart(2, "0");
+  const tick = () => {
+    const agora = Date.now();
+    if (agora >= fim) {
+      caixa.hidden = true;
+      rotulo.textContent = "O IFPB Conecta 2026 foi realizado de 23 a 27 de novembro. Obrigado a todos.";
+      return false;
+    }
+    if (agora >= inicio) {
+      caixa.classList.add("ao-vivo");
+      const restante = fim - agora;
+      const dias = Math.floor(restante / 86400000);
+      celulas[0].textContent = pad(dias);
+      celulas[1].textContent = pad(Math.floor(restante / 3600000) % 24);
+      celulas[2].textContent = pad(Math.floor(restante / 60000) % 60);
+      celulas[3].textContent = pad(Math.floor(restante / 1000) % 60);
+      rotulo.textContent = "O evento está acontecendo agora. Tempo até o encerramento";
+      return true;
+    }
+    const restante = inicio - agora;
+    celulas[0].textContent = String(Math.floor(restante / 86400000));
+    celulas[1].textContent = pad(Math.floor(restante / 3600000) % 24);
+    celulas[2].textContent = pad(Math.floor(restante / 60000) % 60);
+    celulas[3].textContent = pad(Math.floor(restante / 1000) % 60);
+    rotulo.textContent = "Faltam para o início do evento";
+    return true;
+  };
+  if (tick()) setInterval(tick, 1000);
 }
 
 function filtrados() {
@@ -125,6 +168,21 @@ function render() {
   }).join("");
 }
 
+function htmlVagas(ev) {
+  const capacidade = Number(ev.capacidade || 0);
+  if (capacidade <= 0) return "";
+  const restantes = Math.max(0, Number(ev.vagas_restantes || 0));
+  const ocupadas = Math.min(capacidade, capacidade - restantes);
+  const pct = Math.round((ocupadas / capacidade) * 100);
+  const classe = restantes === 0 ? "cheio" : (pct >= 80 ? "quase" : "");
+  const texto = restantes === 0 ? "Vagas esgotadas" : `${restantes} de ${capacidade} vagas`;
+  return `
+    <div class="vagas ${classe}" role="img" aria-label="${esc(texto)}">
+      <div class="vagas-barra"><i style="width:${pct}%"></i></div>
+      <small>${esc(texto)}</small>
+    </div>`;
+}
+
 function htmlEvento(ev) {
   const avaliadores = Array.isArray(ev.avaliadores) ? ev.avaliadores : [];
   const nomes = avaliadores.map((pessoa) => pessoa.titulacao ? `${pessoa.nome} (${pessoa.titulacao})` : pessoa.nome);
@@ -132,8 +190,8 @@ function htmlEvento(ev) {
   let acao = "";
   if (ev.forma_inscricao === "online") {
     if (jaComecou(ev)) acao = `<span class="badge">Inscrições encerradas</span>`;
-    else if (ev.vagas_restantes > 0) acao = `<a class="btn btn-small btn-primary" href="inscricao.html?evento=${esc(ev.id)}">Inscrever-se</a><div class="hint">${ev.vagas_restantes} de ${ev.capacidade} vagas</div>`;
-    else acao = `<a class="btn btn-small btn-ghost" href="inscricao.html?evento=${esc(ev.id)}">Lista de espera</a><div class="hint">Vagas esgotadas</div>`;
+    else if (ev.vagas_restantes > 0) acao = `<a class="btn btn-small btn-primary" href="inscricao.html?evento=${esc(ev.id)}">Inscrever-se</a>${htmlVagas(ev)}`;
+    else acao = `<a class="btn btn-small btn-ghost" href="inscricao.html?evento=${esc(ev.id)}">Lista de espera</a>${htmlVagas(ev)}`;
   } else if (ev.forma_inscricao === "link_externo" && link) {
     acao = `<a class="btn btn-small btn-dark" href="${esc(link)}" target="_blank" rel="noopener">Inscrição externa</a>`;
   } else {

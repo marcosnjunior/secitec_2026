@@ -269,7 +269,7 @@ export function textoCertificado(cert) {
     const eixo = detalhe.eixo && detalhe.eixo !== "geral"
       ? `, com atuação no eixo ${EIXOS[detalhe.eixo] || detalhe.eixo}`
       : "";
-    return `Certificamos que ${nome} integrou a organização do IFPB Conecta, Campus\u00A0Pedras\u00A0de\u00A0Fogo, na função de ${funcao}${eixo}, no período de 23 a 27 de novembro de 2026.`;
+    return `Certificamos que ${nome} integrou a organização do IFPB Conecta, Campus Pedras de Fogo, na função de ${funcao}${eixo}, no período de 23 a 27 de novembro de 2026.`;
   }
   const frase = TIPO_FRASE[detalhe.tipo_evento] || "da atividade";
   const quando = detalhe.data ? formatDataLonga(detalhe.data) : "novembro de 2026";
@@ -281,10 +281,10 @@ export function textoCertificado(cert) {
   const realizado = detalhe.tipo_evento === "minicurso" ? "realizado" : "realizada";
   if (cert.tipo === "avaliador") {
     const titulacao = detalhe.titulacao ? `, ${detalhe.titulacao},` : "";
-    return `Certificamos que ${nome}${titulacao} atuou como professor(a) avaliador(a) ${frase} “${cert.descricao}”, ${realizado} em ${quando}${horario}${local}${eixo}, durante o IFPB Conecta, no Campus\u00A0Pedras\u00A0de\u00A0Fogo.`;
+    return `Certificamos que ${nome}${titulacao} atuou como professor(a) avaliador(a) ${frase} “${cert.descricao}”, ${realizado} em ${quando}${horario}${local}${eixo}, durante o IFPB Conecta, no Campus Pedras de Fogo.`;
   }
   const vinculo = detalhe.instituicao ? `, ${detalhe.instituicao},` : "";
-  return `Certificamos que ${nome}${vinculo} participou ${frase} “${cert.descricao}”, ${realizado} em ${quando}${horario}${local}${eixo}, durante o IFPB Conecta, de 23 a 27 de novembro de 2026, no Campus\u00A0Pedras\u00A0de\u00A0Fogo.`;
+  return `Certificamos que ${nome}${vinculo} participou ${frase} “${cert.descricao}”, ${realizado} em ${quando}${horario}${local}${eixo}, durante o IFPB Conecta, de 23 a 27 de novembro de 2026, no Campus Pedras de Fogo.`;
 }
 
 export function certificadoHtml(cert, { modelo = false } = {}) {
@@ -305,12 +305,13 @@ export function certificadoHtml(cert, { modelo = false } = {}) {
         <h2>Certificado</h2>
         <p class="cert-texto">${esc(textoCertificado(cert))}</p>
         <p class="cert-carga">Carga horária: ${esc(formatCarga(cert.carga_horaria_minutos))}</p>
-        <p class="cert-local">Campus&nbsp;Pedras&nbsp;de&nbsp;Fogo, ${esc(formatDataLonga(dataLinha))}.</p>
+        <p class="cert-local">Campus Pedras de Fogo, ${esc(formatDataLonga(dataLinha))}.</p>
         <div class="cert-assinaturas">
           <p><span></span>Coordenação do IFPB Conecta</p>
           <p><span></span>Comissão organizadora</p>
         </div>
-        <p class="cert-codigo">Código de verificação: ${esc(cert.codigo)}${emitido && !modelo ? ` · Emitido em ${esc(emitido)}` : ""}</p>
+        <p class="cert-codigo">Código de verificação: ${esc(cert.codigo)}</p>
+        ${emitido && !modelo ? `<p class="cert-url">Emitido em ${esc(emitido)}.</p>` : ""}
       </div>
     </article>`;
 }
