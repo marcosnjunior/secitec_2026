@@ -264,7 +264,7 @@ async function recarregar() {
     state.organizadores = org.data || [];
     state.certificados = cert.data || [];
     const trab = await supabase.from("trabalhos")
-      .select("*, trabalho_imagens(id, caminho, legenda, ordem), avaliador:organizadores!avaliador_id(id, nome)")
+      .select("*, avaliador:organizadores!avaliador_id(id, nome)")
       .order("created_at", { ascending: false });
     if (trab.error) {
       state.trabalhos = [];
@@ -296,7 +296,7 @@ function render() {
   else if (state.secao === "trabalhos") box.innerHTML = htmlTrabalhos();
   else if (state.secao === "avaliacoes") box.innerHTML = htmlAvaliacoes();
   else if (state.secao === "certificados") box.innerHTML = htmlCertificados();
-  if (state.secao === "trabalhos" || state.secao === "avaliacoes") preencherImagens();
+  if (state.secao === "trabalhos" || state.secao === "avaliacoes") preencherPdfs();
 }
 
 function htmlPainel() {
@@ -549,7 +549,7 @@ function htmlAvaliacoes() {
   return `
     <h2>Avaliações</h2>
     ${state.trabalhosErro ? `<p class="erro">${esc(state.trabalhosErro)}</p>` : ""}
-    <p class="hint">Devolva o parecer para a coordenação. O aluno vê a recomendação e o texto, sem o seu nome.</p>
+    <p class="hint">Abra o PDF, escreva o parecer e devolva para a coordenação. O aluno vê a recomendação e o texto, sem o seu nome.</p>
     <div class="table-wrap"><table>
       <thead><tr><th>Trabalho</th><th>Autor</th><th>Status</th><th></th></tr></thead>
       <tbody>
@@ -566,32 +566,18 @@ function htmlAvaliacoes() {
 
 function htmlDetalheTrabalho(trabalho, modo) {
   const professores = professoresAvaliadores();
-  const coautores = Array.isArray(trabalho.coautores) ? trabalho.coautores : [];
-  const imagens = [...(trabalho.trabalho_imagens || [])].sort((a, b) => a.ordem - b.ordem);
-  const secoes = [
-    ["Resumo", trabalho.resumo],
-    ["Introdução", trabalho.introducao],
-    ["Fundamentação teórica", trabalho.fundamentacao],
-    ["Metodologia", trabalho.metodologia],
-    ["Resultados", trabalho.resultados],
-    ["Discussões", trabalho.discussoes],
-    ["Bibliografia", trabalho.bibliografia],
-  ];
   return `
     <article class="painel-branco" id="detalhe-trabalho">
       <p><span class="status ${esc(trabalho.status)}">${esc(STATUS_TRABALHO[trabalho.status] || trabalho.status)}</span> · ${esc(trabalho.protocolo)}</p>
       <h3>${esc(trabalho.titulo)}</h3>
-      <p>${esc(EIXOS[trabalho.eixo] || "")}<br>${esc((trabalho.palavras_chave || []).join(", "))}</p>
-      <p><strong>${esc(trabalho.autor_nome)}</strong> · ${esc(trabalho.autor_email)}<br>
-        Orientação: ${esc(trabalho.orientador_nome)} · ${esc(trabalho.orientador_email)}</p>
-      ${coautores.length ? `<p>Coautores: ${coautores.map((pessoa) => `${esc(pessoa.nome)} (${esc(pessoa.email)})`).join("; ")}</p>` : ""}
+      <p>${esc(EIXOS[trabalho.eixo] || "")}</p>
+      <p><strong>${esc(trabalho.autor_nome)}</strong> · ${esc(trabalho.autor_email)}</p>
       ${modo === "coordenacao" && trabalho.avaliador?.nome ? `<p>Professor avaliador: <strong>${esc(trabalho.avaliador.nome)}</strong></p>` : ""}
       ${trabalho.recomendacao ? `<p>Recomendação: <strong>${esc(RECOMENDACOES[trabalho.recomendacao] || "")}</strong></p>` : ""}
       ${trabalho.parecer ? `<div class="trabalho-secoes"><p>${esc(trabalho.parecer)}</p></div>` : ""}
-      <div class="trabalho-secoes">
-        ${secoes.map(([titulo, texto]) => `<h3>${esc(titulo)}</h3><p>${esc(texto)}</p>`).join("")}
-      </div>
-      ${imagens.length ? `<div class="figuras">${imagens.map((img) => `<figure><img data-caminho="${esc(img.caminho)}" alt="${esc(img.legenda)}"><figcaption>${esc(img.legenda)}</figcaption></figure>`).join("")}</div>` : `<p class="hint">Sem imagens.</p>`}
+      ${trabalho.arquivo
+        ? `<p><a class="btn btn-dark" data-caminho="${esc(trabalho.arquivo)}" href="#" target="_blank" rel="noopener">Abrir PDF</a></p>`
+        : `<p class="hint">PDF ainda não anexado.</p>`}
       ${modo === "coordenacao" && trabalho.status !== "em_avaliacao" ? `
         <form id="form-encaminhar">
           <input type="hidden" name="trabalho" value="${esc(trabalho.id)}">
@@ -602,7 +588,7 @@ function htmlDetalheTrabalho(trabalho, modo) {
             </select>
           </label>
           ${professores.length ? "" : `<p class="hint">Marque “Pode avaliar trabalhos” em um organizador que já criou senha.</p>`}
-          <button class="btn btn-dark" type="submit" ${professores.length ? "" : "disabled"}>Aceitar e encaminhar</button>
+          <button class="btn btn-dark" type="submit" ${professores.length && trabalho.arquivo ? "" : "disabled"}>Aceitar e encaminhar</button>
         </form>` : ""}
       ${modo === "coordenacao" && trabalho.status === "em_avaliacao" ? `<button type="button" class="btn btn-danger" data-action="cancelar-envio" data-id="${esc(trabalho.id)}">Cancelar envio</button>` : ""}
       ${modo === "professor" && trabalho.status === "em_avaliacao" ? `
@@ -621,11 +607,11 @@ function htmlDetalheTrabalho(trabalho, modo) {
     </article>`;
 }
 
-async function preencherImagens() {
-  const figuras = [...document.querySelectorAll("img[data-caminho]")];
-  await Promise.all(figuras.map(async (img) => {
-    const { data } = await supabase.storage.from("trabalhos").createSignedUrl(img.dataset.caminho, 60 * 30);
-    if (data?.signedUrl && img.isConnected) img.src = data.signedUrl;
+async function preencherPdfs() {
+  const links = [...document.querySelectorAll("a[data-caminho]")];
+  await Promise.all(links.map(async (link) => {
+    const { data } = await supabase.storage.from("trabalhos").createSignedUrl(link.dataset.caminho, 60 * 30);
+    if (data?.signedUrl && link.isConnected) link.href = data.signedUrl;
   }));
 }
 

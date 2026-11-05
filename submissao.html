@@ -33,7 +33,7 @@
   <main id="conteudo" class="wrap">
     <section class="page-intro">
       <h1>Trabalhos científicos</h1>
-      <p class="lede">Envie o trabalho com CPF ou matrícula e o e-mail. A coordenação confere e encaminha para avaliação. Você acompanha cada etapa, sem ver quem é o professor avaliador.</p>
+      <p class="lede">Envie o artigo em PDF, com CPF ou matrícula e o e-mail. A coordenação confere e encaminha para avaliação. Você acompanha cada etapa, sem ver quem é o professor avaliador.</p>
     </section>
     <div id="aviso"></div>
     <form id="form-trabalho" class="painel-branco">
@@ -48,9 +48,6 @@
         <label class="field">Eixo
           <select name="eixo" required></select>
         </label>
-        <label class="field">Palavras-chave
-          <input name="palavras" required placeholder="3 a 5, separadas por vírgula">
-        </label>
         <label class="field">Nome do autor
           <input name="autor_nome" required autocomplete="name">
         </label>
@@ -63,46 +60,12 @@
         <label class="field">Matrícula do autor
           <input name="autor_matricula" maxlength="30" autocomplete="off">
         </label>
-        <label class="field">Nome do orientador
-          <input name="orientador_nome" required>
-        </label>
-        <label class="field">E-mail do orientador
-          <input name="orientador_email" type="email" required>
+        <label class="field span-2">Artigo em PDF
+          <input name="pdf" type="file" accept="application/pdf,.pdf" required>
+          <span class="hint">Um arquivo PDF, de até 20 MB.</span>
         </label>
       </div>
       <p class="hint">Informe o CPF, a matrícula ou os dois. Use os mesmos dados para consultar o andamento.</p>
-      <div id="coautores"></div>
-      <button type="button" class="btn btn-small btn-ghost" id="add-coautor">Adicionar coautor</button>
-      <h2>Texto</h2>
-      <label class="field">Resumo
-        <textarea name="resumo" required minlength="50" maxlength="1500"></textarea>
-        <span class="hint">De 50 a 1500 caracteres.</span>
-      </label>
-      <label class="field">Introdução
-        <textarea name="introducao" required minlength="30" maxlength="12000"></textarea>
-      </label>
-      <label class="field">Fundamentação teórica
-        <textarea name="fundamentacao" required minlength="30" maxlength="12000"></textarea>
-      </label>
-      <label class="field">Metodologia
-        <textarea name="metodologia" required minlength="30" maxlength="12000"></textarea>
-      </label>
-      <label class="field">Resultados
-        <textarea name="resultados" required minlength="30" maxlength="12000"></textarea>
-      </label>
-      <label class="field">Discussões
-        <textarea name="discussoes" required minlength="30" maxlength="12000"></textarea>
-      </label>
-      <label class="field">Bibliografia
-        <textarea name="bibliografia" required minlength="10" maxlength="8000" placeholder="Uma referência por linha"></textarea>
-      </label>
-      <h2>Imagens</h2>
-      <p class="hint">Até 3 imagens JPG ou PNG, com no máximo 5 MB cada. A legenda é obrigatória quando houver arquivo.</p>
-      <div class="grid-3">
-        <div class="field"><span>Imagem 1</span><input name="img1" type="file" accept="image/jpeg,image/png"><input name="leg1" maxlength="160" placeholder="Legenda"></div>
-        <div class="field"><span>Imagem 2</span><input name="img2" type="file" accept="image/jpeg,image/png"><input name="leg2" maxlength="160" placeholder="Legenda"></div>
-        <div class="field"><span>Imagem 3</span><input name="img3" type="file" accept="image/jpeg,image/png"><input name="leg3" maxlength="160" placeholder="Legenda"></div>
-      </div>
       <button class="btn btn-primary" type="submit">Enviar trabalho</button>
     </form>
     <div id="recibo"></div>

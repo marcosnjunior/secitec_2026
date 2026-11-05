@@ -1116,21 +1116,22 @@ create table if not exists public.trabalhos (
   protocolo text not null unique,
   titulo text not null,
   eixo public.eixo_evento not null,
-  palavras_chave text[] not null,
+  palavras_chave text[],
   autor_nome text not null,
   autor_email text not null,
   autor_cpf text,
   autor_matricula text,
-  orientador_nome text not null,
-  orientador_email text not null,
+  orientador_nome text,
+  orientador_email text,
   coautores jsonb not null default '[]'::jsonb,
-  resumo text not null,
-  introducao text not null,
-  fundamentacao text not null,
-  metodologia text not null,
-  resultados text not null,
-  discussoes text not null,
-  bibliografia text not null,
+  resumo text,
+  introducao text,
+  fundamentacao text,
+  metodologia text,
+  resultados text,
+  discussoes text,
+  bibliografia text,
+  arquivo text,
   status public.status_trabalho not null default 'submetido',
   avaliador_id uuid references public.organizadores (id) on delete set null,
   recomendacao public.recomendacao_trabalho,
@@ -1139,11 +1140,10 @@ create table if not exists public.trabalhos (
   avaliado_em timestamptz,
   created_at timestamptz not null default now(),
   constraint trabalhos_titulo_ok check (char_length(titulo) between 10 and 180),
-  constraint trabalhos_resumo_ok check (char_length(resumo) between 50 and 1500),
   constraint trabalhos_documento_ok check (autor_cpf is not null or autor_matricula is not null),
   constraint trabalhos_cpf_ok check (autor_cpf is null or public.cpf_valido(autor_cpf)),
   constraint trabalhos_matricula_ok check (autor_matricula is null or char_length(autor_matricula) between 3 and 30),
-  constraint trabalhos_palavras_ok check (cardinality(palavras_chave) between 3 and 5),
+  constraint trabalhos_arquivo_ok check (arquivo is null or arquivo ~* '\.pdf$'),
   constraint trabalhos_coautores_ok check (jsonb_typeof(coautores) = 'array' and jsonb_array_length(coautores) <= 4)
 );
 
@@ -1172,8 +1172,25 @@ create table if not exists public.trabalho_movimentos (
 create index if not exists trabalhos_autor_email_idx on public.trabalhos (autor_email);
 create index if not exists trabalhos_status_idx on public.trabalhos (status);
 
+alter table public.trabalhos alter column palavras_chave drop not null;
+alter table public.trabalhos alter column orientador_nome drop not null;
+alter table public.trabalhos alter column orientador_email drop not null;
+alter table public.trabalhos alter column resumo drop not null;
+alter table public.trabalhos alter column introducao drop not null;
+alter table public.trabalhos alter column fundamentacao drop not null;
+alter table public.trabalhos alter column metodologia drop not null;
+alter table public.trabalhos alter column resultados drop not null;
+alter table public.trabalhos alter column discussoes drop not null;
+alter table public.trabalhos alter column bibliografia drop not null;
+alter table public.trabalhos add column if not exists arquivo text;
+alter table public.trabalhos drop constraint if exists trabalhos_resumo_ok;
+alter table public.trabalhos drop constraint if exists trabalhos_palavras_ok;
+alter table public.trabalhos drop constraint if exists trabalhos_arquivo_ok;
+alter table public.trabalhos
+  add constraint trabalhos_arquivo_ok check (arquivo is null or arquivo ~* '\.pdf$');
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('trabalhos', 'trabalhos', false, 5242880, array['image/jpeg', 'image/png'])
+values ('trabalhos', 'trabalhos', false, 20971520, array['application/pdf'])
 on conflict (id) do update
 set public = false,
     file_size_limit = excluded.file_size_limit,
@@ -1214,11 +1231,6 @@ declare
   v_cpf text;
   v_matricula text;
   v_email text;
-  v_orientador_email text;
-  v_palavras text[] := '{}';
-  v_coautores jsonb := '[]'::jsonb;
-  v_item jsonb;
-  v_palavra text;
   v_nome text;
   v_eixo public.eixo_evento;
   v_tentativa integer := 0;
@@ -1235,27 +1247,6 @@ begin
   exception when invalid_text_representation then
     raise exception 'Eixo inválido';
   end;
-
-  if jsonb_typeof(coalesce(p_dados->'palavras_chave', '[]'::jsonb)) <> 'array' then
-    raise exception 'Informe de 3 a 5 palavras-chave';
-  end if;
-  for v_palavra in
-    select btrim(value) from jsonb_array_elements_text(p_dados->'palavras_chave')
-  loop
-    if v_palavra = '' then
-      continue;
-    end if;
-    if char_length(v_palavra) < 2 or char_length(v_palavra) > 40 then
-      raise exception 'Cada palavra-chave deve ter entre 2 e 40 caracteres';
-    end if;
-    if exists (select 1 from unnest(v_palavras) existente where lower(existente) = lower(v_palavra)) then
-      continue;
-    end if;
-    v_palavras := v_palavras || v_palavra;
-  end loop;
-  if cardinality(v_palavras) < 3 or cardinality(v_palavras) > 5 then
-    raise exception 'Informe de 3 a 5 palavras-chave';
-  end if;
 
   v_nome := btrim(coalesce(p_dados->>'autor_nome', ''));
   if char_length(v_nome) < 5 or v_nome !~ '\S\s+\S' then
@@ -1276,84 +1267,24 @@ begin
   if v_matricula is not null and char_length(v_matricula) not between 3 and 30 then
     raise exception 'Matrícula inválida';
   end if;
-
-  if char_length(btrim(coalesce(p_dados->>'orientador_nome', ''))) < 5
-     or btrim(p_dados->>'orientador_nome') !~ '\S\s+\S' then
-    raise exception 'Informe nome e sobrenome do orientador';
-  end if;
-  v_orientador_email := lower(btrim(coalesce(p_dados->>'orientador_email', '')));
-  if v_orientador_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-    raise exception 'E-mail do orientador inválido';
-  end if;
   if char_length(btrim(coalesce(p_dados->>'titulo', ''))) not between 10 and 180 then
     raise exception 'O título deve ter entre 10 e 180 caracteres';
   end if;
-  if char_length(btrim(coalesce(p_dados->>'resumo', ''))) not between 50 and 1500 then
-    raise exception 'O resumo deve ter entre 50 e 1500 caracteres';
-  end if;
-  if char_length(btrim(coalesce(p_dados->>'introducao', ''))) not between 30 and 12000
-     or char_length(btrim(coalesce(p_dados->>'fundamentacao', ''))) not between 30 and 12000
-     or char_length(btrim(coalesce(p_dados->>'metodologia', ''))) not between 30 and 12000
-     or char_length(btrim(coalesce(p_dados->>'resultados', ''))) not between 30 and 12000
-     or char_length(btrim(coalesce(p_dados->>'discussoes', ''))) not between 30 and 12000 then
-    raise exception 'Introdução, fundamentação, metodologia, resultados e discussões devem ter entre 30 e 12000 caracteres';
-  end if;
-  if char_length(btrim(coalesce(p_dados->>'bibliografia', ''))) not between 10 and 8000 then
-    raise exception 'A bibliografia deve ter entre 10 e 8000 caracteres';
-  end if;
-
-  if coalesce(jsonb_typeof(p_dados->'coautores'), 'array') <> 'array' then
-    raise exception 'Coautores inválidos';
-  end if;
-  if jsonb_array_length(coalesce(p_dados->'coautores', '[]'::jsonb)) > 4 then
-    raise exception 'Informe no máximo 4 coautores';
-  end if;
-  for v_item in
-    select value from jsonb_array_elements(coalesce(p_dados->'coautores', '[]'::jsonb))
-  loop
-    if btrim(coalesce(v_item->>'nome', '')) = '' and btrim(coalesce(v_item->>'email', '')) = '' then
-      continue;
-    end if;
-    if char_length(btrim(coalesce(v_item->>'nome', ''))) < 5 or btrim(v_item->>'nome') !~ '\S\s+\S' then
-      raise exception 'Informe nome e sobrenome de cada coautor';
-    end if;
-    if lower(btrim(coalesce(v_item->>'email', ''))) !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-      raise exception 'E-mail de coautor inválido';
-    end if;
-    v_coautores := v_coautores || jsonb_build_array(jsonb_build_object(
-      'nome', btrim(v_item->>'nome'),
-      'email', lower(btrim(v_item->>'email'))
-    ));
-  end loop;
 
   while v_tentativa < 5 loop
     v_tentativa := v_tentativa + 1;
     v_protocolo := 'IFPB-T-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
     begin
       insert into public.trabalhos (
-        protocolo, titulo, eixo, palavras_chave,
-        autor_nome, autor_email, autor_cpf, autor_matricula,
-        orientador_nome, orientador_email, coautores,
-        resumo, introducao, fundamentacao, metodologia, resultados, discussoes, bibliografia
+        protocolo, titulo, eixo, autor_nome, autor_email, autor_cpf, autor_matricula
       ) values (
         v_protocolo,
         btrim(p_dados->>'titulo'),
         v_eixo,
-        v_palavras,
         v_nome,
         v_email,
         v_cpf,
-        v_matricula,
-        btrim(p_dados->>'orientador_nome'),
-        v_orientador_email,
-        v_coautores,
-        btrim(p_dados->>'resumo'),
-        btrim(p_dados->>'introducao'),
-        btrim(p_dados->>'fundamentacao'),
-        btrim(p_dados->>'metodologia'),
-        btrim(p_dados->>'resultados'),
-        btrim(p_dados->>'discussoes'),
-        btrim(p_dados->>'bibliografia')
+        v_matricula
       )
       returning id into v_id;
       exit;
@@ -1371,13 +1302,14 @@ begin
 end;
 $$;
 
-create or replace function public.anexar_imagem_trabalho(
+drop function if exists public.anexar_imagem_trabalho(uuid, text, text, text, text, text);
+
+create or replace function public.anexar_pdf_trabalho(
   p_trabalho uuid,
   p_cpf text,
   p_matricula text,
   p_email text,
-  p_caminho text,
-  p_legenda text
+  p_caminho text
 )
 returns jsonb
 language plpgsql
@@ -1389,15 +1321,14 @@ declare
   v_cpf text;
   v_matricula text;
   v_email text;
-  v_ordem integer;
 begin
   perform pg_advisory_xact_lock(hashtext(p_trabalho::text)::bigint);
   select * into v_trabalho from public.trabalhos where id = p_trabalho for update;
   if not found then
     raise exception 'Trabalho não encontrado';
   end if;
-  if v_trabalho.status <> 'submetido' then
-    raise exception 'As imagens só podem ser enviadas antes da coordenação encaminhar o trabalho';
+  if v_trabalho.status <> 'submetido' or v_trabalho.arquivo is not null then
+    raise exception 'Este trabalho já tem PDF';
   end if;
 
   v_email := lower(btrim(coalesce(p_email, '')));
@@ -1407,30 +1338,55 @@ begin
      or (v_cpf is not null and v_cpf is distinct from v_trabalho.autor_cpf)
      or (v_matricula is not null and v_matricula is distinct from v_trabalho.autor_matricula)
      or (v_cpf is null and v_matricula is null) then
-    raise exception 'Não foi possível anexar a imagem';
+    raise exception 'Não foi possível anexar o PDF';
   end if;
-  if p_caminho !~ ('^' || p_trabalho::text || '/[0-9a-f-]{36}\.(jpg|jpeg|png)$') then
-    raise exception 'Arquivo inválido';
+  if p_caminho !~ ('^' || p_trabalho::text || '/[0-9a-f-]{36}\.pdf$') then
+    raise exception 'Envie um arquivo PDF';
   end if;
   if not exists (
     select 1 from storage.objects
     where bucket_id = 'trabalhos' and name = p_caminho
   ) then
-    raise exception 'A imagem não chegou ao armazenamento';
-  end if;
-  if char_length(btrim(coalesce(p_legenda, ''))) not between 3 and 160 then
-    raise exception 'Informe a legenda da imagem';
+    raise exception 'O PDF não chegou ao armazenamento';
   end if;
 
-  select count(*) into v_ordem from public.trabalho_imagens where trabalho_id = p_trabalho;
-  if v_ordem >= 3 then
-    raise exception 'O trabalho aceita no máximo 3 imagens';
+  update public.trabalhos set arquivo = p_caminho where id = p_trabalho;
+  return jsonb_build_object('arquivo', p_caminho);
+end;
+$$;
+
+create or replace function public.descartar_submissao(
+  p_trabalho uuid,
+  p_cpf text,
+  p_matricula text,
+  p_email text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_trabalho public.trabalhos;
+  v_cpf text;
+  v_matricula text;
+  v_email text;
+begin
+  select * into v_trabalho from public.trabalhos where id = p_trabalho for update;
+  if not found then
+    return;
   end if;
-
-  insert into public.trabalho_imagens (trabalho_id, caminho, legenda, ordem)
-  values (p_trabalho, p_caminho, btrim(p_legenda), v_ordem + 1);
-
-  return jsonb_build_object('ordem', v_ordem + 1);
+  v_email := lower(btrim(coalesce(p_email, '')));
+  v_cpf := nullif(regexp_replace(coalesce(p_cpf, ''), '\D', '', 'g'), '');
+  v_matricula := nullif(upper(regexp_replace(coalesce(p_matricula, ''), '\s+', '', 'g')), '');
+  if v_trabalho.status = 'submetido'
+     and v_trabalho.arquivo is null
+     and v_email = v_trabalho.autor_email
+     and (v_cpf is not distinct from v_trabalho.autor_cpf or v_cpf is null)
+     and (v_matricula is not distinct from v_trabalho.autor_matricula or v_matricula is null)
+     and (v_cpf is not null or v_matricula is not null) then
+    delete from public.trabalhos where id = p_trabalho;
+  end if;
 end;
 $$;
 
@@ -1470,11 +1426,7 @@ begin
       'eixo', t.eixo,
       'status', t.status,
       'criado_em', t.created_at,
-      'imagens', coalesce((
-        select jsonb_agg(jsonb_build_object('ordem', i.ordem, 'legenda', i.legenda) order by i.ordem)
-        from public.trabalho_imagens i
-        where i.trabalho_id = t.id
-      ), '[]'::jsonb),
+      'tem_pdf', t.arquivo is not null,
       'historico', coalesce((
         select jsonb_agg(jsonb_build_object(
           'quando', m.ocorrido_em,
@@ -1523,6 +1475,9 @@ begin
   end if;
   if v_trabalho.status = 'em_avaliacao' then
     raise exception 'Cancele o envio atual antes de encaminhar a outro professor';
+  end if;
+  if v_trabalho.arquivo is null then
+    raise exception 'Este trabalho ainda não tem PDF';
   end if;
 
   update public.trabalhos
@@ -1706,7 +1661,7 @@ for insert to anon, authenticated
 with check (
   bucket_id = 'trabalhos'
   and (storage.foldername(name))[1] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  and lower(storage.extension(name)) in ('jpg', 'jpeg', 'png')
+  and lower(storage.extension(name)) = 'pdf'
 );
 
 drop policy if exists trabalhos_leitura_arquivo on storage.objects;
@@ -1765,7 +1720,8 @@ revoke all on function public.tg_emitir_certificado_presenca() from public;
 revoke all on function public.is_coordenacao() from public;
 revoke all on function public.organizador_atual() from public;
 revoke all on function public.submeter_trabalho(jsonb) from public;
-revoke all on function public.anexar_imagem_trabalho(uuid, text, text, text, text, text) from public;
+revoke all on function public.anexar_pdf_trabalho(uuid, text, text, text, text) from public;
+revoke all on function public.descartar_submissao(uuid, text, text, text) from public;
 revoke all on function public.consultar_trabalhos_aluno(text, text, text) from public;
 revoke all on function public.encaminhar_trabalho(uuid, uuid) from public;
 revoke all on function public.cancelar_encaminhamento(uuid) from public;
@@ -1791,7 +1747,8 @@ grant execute on function public.tg_emitir_certificado_presenca() to authenticat
 grant execute on function public.is_coordenacao() to authenticated;
 grant execute on function public.organizador_atual() to authenticated;
 grant execute on function public.submeter_trabalho(jsonb) to anon, authenticated;
-grant execute on function public.anexar_imagem_trabalho(uuid, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.anexar_pdf_trabalho(uuid, text, text, text, text) to anon, authenticated;
+grant execute on function public.descartar_submissao(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.consultar_trabalhos_aluno(text, text, text) to anon, authenticated;
 grant execute on function public.encaminhar_trabalho(uuid, uuid) to authenticated;
 grant execute on function public.cancelar_encaminhamento(uuid) to authenticated;
