@@ -54,7 +54,10 @@ async function mostrarAcesso(mensagem = "") {
         <h2>${primeiro ? "Já criei a senha" : "Entrar"}</h2>
         <label class="field">E-mail <input name="email" type="email" autocomplete="username" required></label>
         <label class="field">Senha <input name="senha" type="password" autocomplete="current-password" required minlength="8"></label>
-        <button class="btn btn-dark" type="submit">Entrar</button>
+        <div class="linha-login">
+          <button class="btn btn-dark" type="submit">Entrar</button>
+          <a class="link-discreto" href="senha.html">Esqueci minha senha</a>
+        </div>
       </form>
       <form id="form-criar" class="painel-branco">
         <h2>${primeiro ? "Criar a coordenação" : "Criar acesso"}</h2>

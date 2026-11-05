@@ -396,6 +396,10 @@ input[type="checkbox"] { width: auto; accent-color: var(--green); }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 .span-2 { grid-column: span 2; }
 .painel-branco h2:not(:first-child) { margin-top: 24px; }
+.linha-login { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+.link-discreto { font-weight: 700; font-size: 0.92rem; color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.link-discreto:hover { color: var(--ink); }
+.senha-painel { max-width: 560px; }
 .painel-branco > .btn, .painel-branco > button.btn { margin-top: 6px; }
 
 /* Programação */

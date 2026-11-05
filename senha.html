@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFPB Conecta 2026 — Recuperar senha</title>
+  <meta name="description" content="Recuperação de senha das contas do IFPB Conecta 2026.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/logo-ifpb-conecta.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=20261105">
+</head>
+<body>
+  <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+  <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  <header class="site-header">
+    <div class="wrap bar">
+      <a class="brand" href="index.html">
+        <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        <span><strong>IFPB Conecta</strong><small>23–27 nov 2026</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav id="menu" class="nav" aria-label="Principal">
+        <a href="index.html#programacao">Programação</a>
+        <a href="inscricao.html">Inscrição</a>
+        <a href="submissao.html">Trabalhos</a>
+        <a href="certificado.html">Certificados</a>
+        <a href="admin.html">Organização</a>
+      </nav>
+    </div>
+  </header>
+  <main id="conteudo" class="wrap">
+    <section class="page-intro">
+      <p class="kicker">IFPB Conecta 2026 · Campus Pedras de Fogo</p>
+      <h1>Recuperar senha</h1>
+      <p class="lede">Vale para a conta de participante e para a conta da organização. Você recebe um link por e-mail e define a nova senha aqui.</p>
+    </section>
+    <div id="aviso"></div>
+    <form id="form-pedir" class="painel-branco senha-painel" hidden>
+      <h2>Enviar link por e-mail</h2>
+      <label class="field">E-mail da conta
+        <input name="email" type="email" autocomplete="username" required maxlength="160">
+      </label>
+      <button class="btn btn-primary" type="submit">Enviar link</button>
+      <p class="hint">Se o e-mail estiver cadastrado, a mensagem chega em alguns minutos. Confira também a caixa de spam.</p>
+    </form>
+    <div id="enviado" class="painel-branco senha-painel" hidden>
+      <h2>Verifique seu e-mail</h2>
+      <p>Se <strong id="enviado-email"></strong> estiver cadastrado, enviamos um link para redefinir a senha. O link vale por pouco tempo e só pode ser usado uma vez.</p>
+      <p>
+        <button type="button" class="btn btn-ghost" id="reenviar">Enviar para outro e-mail</button>
+        <a class="btn btn-ghost" href="inscricao.html">Voltar para a inscrição</a>
+      </p>
+    </div>
+    <form id="form-nova" class="painel-branco senha-painel" hidden>
+      <h2>Definir nova senha</h2>
+      <p class="hint" id="nova-conta"></p>
+      <label class="field">Nova senha
+        <input name="senha" type="password" autocomplete="new-password" required minlength="8">
+        <span class="hint">Mínimo de 8 caracteres.</span>
+      </label>
+      <label class="field">Repita a nova senha
+        <input name="confirma" type="password" autocomplete="new-password" required minlength="8">
+      </label>
+      <button class="btn btn-primary" type="submit">Salvar nova senha</button>
+    </form>
+    <div id="pronto" class="painel-branco senha-painel" hidden>
+      <h2>Senha alterada</h2>
+      <p>Você já está conectado com a nova senha.</p>
+      <p id="pronto-acoes"></p>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="wrap footer-inner">
+      <p><strong>IFPB Conecta</strong> · 23 a 27 de novembro de 2026 · Campus Pedras de Fogo</p>
+    </div>
+  </footer>
+  <div id="toasts" class="toast-wrap" aria-live="polite"></div>
+  <script type="module" src="js/senha.js?v=20261105"></script>
+</body>
+</html>

@@ -42,6 +42,22 @@ export function mensagemErro(error) {
   if (/email not confirmed/i.test(bruto)) {
     return "O Supabase está exigindo confirmação de e-mail. Desative “Confirm email” em Authentication → Providers → Email.";
   }
+  if (/you can only request this after (\d+) seconds/i.test(bruto)) {
+    const segundos = bruto.match(/after (\d+) seconds/i)[1];
+    return `Aguarde ${segundos} segundos antes de pedir outro e-mail.`;
+  }
+  if (/email rate limit exceeded|over_email_send_rate_limit/i.test(bruto)) {
+    return "O limite de e-mails foi atingido por enquanto. Tente de novo mais tarde.";
+  }
+  if (/new password should be different/i.test(bruto)) {
+    return "A nova senha precisa ser diferente da atual.";
+  }
+  if (/password should be at least/i.test(bruto)) {
+    return "A senha precisa ter ao menos 8 caracteres.";
+  }
+  if (/auth session missing|session.*expired|invalid refresh token/i.test(bruto)) {
+    return "A sessão do link expirou. Peça um novo link de recuperação.";
+  }
   if (/organizadores_matricula_unica/i.test(bruto)) {
     return "Esta matrícula já está cadastrada.";
   }
