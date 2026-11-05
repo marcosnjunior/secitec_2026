@@ -307,6 +307,11 @@ export function certificadoHtml(cert, { modelo = false } = {}) {
     <article class="cert-sheet${modelo ? " modelo" : ""}">
       <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
       <div class="cert-miolo">
+        <div class="cert-marcas" aria-hidden="true">
+          <img src="assets/logo-ifpb-conecta.jpg" alt="">
+          <img src="assets/logo-ifpb-conecta.jpg" alt="">
+          <img src="assets/logo-ifpb-conecta.jpg" alt="">
+        </div>
         <div class="cert-logos">
           <img src="assets/logo-ifpb-pedras-de-fogo.jpg" alt="Instituto Federal da Paraíba, Campus Pedras de Fogo">
           <img src="assets/logo-ifpb-conecta.jpg" alt="IFPB Conecta">
