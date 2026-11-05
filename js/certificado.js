@@ -38,14 +38,16 @@ async function carregarMeus() {
   }
   const area = await supabase.rpc("minha_area");
   if (area.error || !area.data?.participante) return;
+  form.hidden = true;
+  modelos.hidden = true;
   const lista = area.data.certificados || [];
   if (!lista.length) {
-    meus.innerHTML = `<p class="painel-branco no-print">Olá, ${esc(area.data.participante.nome)}. O certificado aparece aqui depois que a coordenação confirmar a sua presença no início do evento.</p>`;
+    meus.innerHTML = `<p class="painel-branco no-print">Nenhum certificado liberado ainda. Eles aparecem aqui depois que a coordenação confirmar a presença.</p>`;
     return;
   }
   meus.innerHTML = `
     <div class="linha-acoes no-print">
-      <p>${lista.length} certificado(s) da sua conta.</p>
+      <p>${lista.length} certificado(s) liberado(s).</p>
       <button type="button" class="btn btn-dark" id="imprimir-meus">Imprimir ou salvar em PDF</button>
     </div>
     ${lista.map((cert) => certificadoHtml(cert, { modelo: false })).join("")}`;
