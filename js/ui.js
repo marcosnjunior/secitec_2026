@@ -310,8 +310,7 @@ export function certificadoHtml(cert, { modelo = false } = {}) {
           <p><span></span>Coordenação do IFPB Conecta</p>
           <p><span></span>Comissão organizadora</p>
         </div>
-        <p class="cert-codigo">Código de verificação: ${esc(cert.codigo)}</p>
-        ${emitido && !modelo ? `<p class="cert-url">Emitido em ${esc(emitido)}.</p>` : ""}
+        <p class="cert-codigo">Código de verificação: ${esc(cert.codigo)}${emitido && !modelo ? ` · Emitido em ${esc(emitido)}` : ""}</p>
       </div>
     </article>`;
 }

@@ -322,15 +322,16 @@ dialog::backdrop { background: rgba(22, 22, 22, 0.48); }
 .aval-row .field { margin: 0; }
 
 .cert-sheet { background: white; border: 1px solid var(--line); margin: 12px auto; max-width: 1100px; }
-.cert-miolo { position: relative; padding: 28px 36px 32px; text-align: center; overflow: hidden; }
+.cert-miolo { position: relative; padding: 18px 36px 22px; text-align: center; overflow: hidden; }
+.cert-miolo p { margin-bottom: 0.35rem; }
 .cert-logos { display: flex; justify-content: center; align-items: center; gap: 48px; }
-.cert-logos img { height: 118px; width: auto; object-fit: contain; }
-.cert-kicker { letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; font-size: 0.82rem; margin-top: 8px; }
+.cert-logos img { height: 92px; width: auto; object-fit: contain; }
+.cert-kicker { letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; font-size: 0.82rem; margin-top: 4px; }
 .cert-sheet h2 {
   font-family: Literata, Georgia, serif;
-  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  font-size: clamp(2rem, 4vw, 2.8rem);
   font-weight: 700;
-  margin: 8px 0 18px;
+  margin: 4px 0 10px;
 }
 .cert-texto, .cert-local, .cert-carga {
   font-family: Literata, Georgia, serif;
@@ -341,7 +342,7 @@ dialog::backdrop { background: rgba(22, 22, 22, 0.48); }
 }
 .cert-nome { text-transform: uppercase; }
 .cert-carga { font-weight: 700; }
-.cert-assinaturas { display: flex; justify-content: center; gap: 48px; margin-top: 36px; }
+.cert-assinaturas { display: flex; justify-content: center; gap: 48px; margin-top: 16px; }
 .cert-assinaturas p { min-width: 180px; }
 .cert-assinaturas span { display: block; border-top: 1px solid var(--ink); margin-bottom: 6px; }
 .cert-codigo { font-weight: 800; letter-spacing: 0.04em; }
@@ -412,10 +413,20 @@ dialog::backdrop { background: rgba(22, 22, 22, 0.48); }
   body.printing-cert .cert-sheet,
   body.printing-cert .cert-sheet * { visibility: visible; }
   body.printing-cert .cert-sheet {
-    position: absolute;
-    inset: 0;
+    position: static;
     border: 0;
     max-width: none;
+    margin: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
+  body.printing-cert .cert-miolo { padding: 4px 12px 6px; }
+  body.printing-cert .cert-logos img { height: 68px; }
+  body.printing-cert .cert-sheet h2 { font-size: 1.8rem; margin: 2px 0 6px; }
+  body.printing-cert .cert-texto,
+  body.printing-cert .cert-local,
+  body.printing-cert .cert-carga { font-size: 1rem; line-height: 1.35; }
+  body.printing-cert .cert-miolo p { margin-bottom: 0.15rem; }
+  body.printing-cert .cert-assinaturas { margin-top: 8px; gap: 36px; }
 }
-@page { size: A4 landscape; margin: 12mm; }
+@page { size: A4 landscape; margin: 8mm; }
