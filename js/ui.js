@@ -287,17 +287,12 @@ export function textoCertificado(cert) {
   return `Certificamos que ${nome}${vinculo} participou ${frase} “${cert.descricao}”, ${realizado} em ${quando}${horario}${local}${eixo}, durante o IFPB Conecta, de 23 a 27 de novembro de 2026.`;
 }
 
-export function urlCertificado(codigo) {
-  return new URL(`certificado.html?codigo=${encodeURIComponent(codigo)}`, location.href).href;
-}
-
 export function certificadoHtml(cert, { modelo = false } = {}) {
   const detalhe = cert.detalhe || {};
   const dataLinha = cert.tipo === "organizador" ? "2026-11-27" : (detalhe.data || "2026-11-27");
   const emitido = cert.emitido_em
     ? formatDataLonga(String(cert.emitido_em).slice(0, 10))
     : "";
-  const verificacao = modelo ? "" : urlCertificado(cert.codigo);
   return `
     <article class="cert-sheet${modelo ? " modelo" : ""}">
       <div class="cores" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
@@ -313,7 +308,6 @@ export function certificadoHtml(cert, { modelo = false } = {}) {
           <p><span></span>Comissão organizadora</p>
         </div>
         <p class="cert-codigo">Código de verificação: ${esc(cert.codigo)}</p>
-        ${verificacao ? `<p class="cert-url">${esc(verificacao)}</p>` : ""}
         ${emitido && !modelo ? `<p class="cert-url">Emitido em ${esc(emitido)}.</p>` : ""}
       </div>
     </article>`;
